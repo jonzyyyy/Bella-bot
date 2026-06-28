@@ -4,6 +4,7 @@
   "timezone": "Asia/Singapore",
   "statusAfterCompletion": true,
   "dailySummaryCron": "0 21 * * *",
+  "weeklyResponsibilityCron": "0 21 * * 0",
   "tasks": [
     {
       "id": "feed_am",
