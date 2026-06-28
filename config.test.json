@@ -1,0 +1,90 @@
+{
+  "petName": "Bella",
+  "groupName": "Bella Test 🧪",
+  "timezone": "Asia/Singapore",
+  "statusAfterCompletion": true,
+  "tasks": [
+    {
+      "id": "feed_am",
+      "label": "Breakfast",
+      "emoji": "🍖",
+      "keywords": [
+        "fed",
+        "feed",
+        "feeding",
+        "fed her",
+        "fed him",
+        "breakfast",
+        "bfast",
+        "morning feed"
+      ],
+      "window": {
+        "from": "00:00",
+        "to": "14:00"
+      },
+      "reminders": [
+        {
+          "cron": "0 8 * * *",
+          "message": "Time for Bella's breakfast 🍖"
+        }
+      ]
+    },
+    {
+      "id": "feed_pm",
+      "label": "Dinner",
+      "emoji": "🍖",
+      "keywords": [
+        "fed",
+        "feed",
+        "feeding",
+        "fed her",
+        "fed him",
+        "dinner",
+        "evening feed"
+      ],
+      "window": {
+        "from": "14:00",
+        "to": "23:59"
+      },
+      "reminders": [
+        {
+          "cron": "0 20 * * *",
+          "message": "Time for Bella's dinner 🍖"
+        }
+      ]
+    },
+    {
+      "id": "walk_pm",
+      "label": "Evening walk",
+      "emoji": "🦮",
+      "keywords": [
+        "walked",
+        "walk",
+        "walking",
+        "took her out",
+        "took him out",
+        "evening walk",
+        "night walk"
+      ],
+      "window": {
+        "from": "13:00",
+        "to": "23:59"
+      },
+      "reminders": []
+    },
+    {
+      "id": "poop",
+      "label": "Pooped",
+      "emoji": "💩",
+      "multiple": true,
+      "keywords": [
+        "shat",
+        "pooped",
+        "poop",
+        "poo",
+        "did her business"
+      ],
+      "reminders": []
+    }
+  ]
+}

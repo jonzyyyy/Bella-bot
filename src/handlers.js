@@ -1,10 +1,10 @@
 const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
-  extractTimeFromText, describeSchedule, parseTimeToCron, getTask,
+  extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange,
 } = require('./configStore');
 const db = require('./db');
-const { matchTask, isStatusRequest, matchHistoryRequest } = require('./matcher');
-const { buildHistoryMessage, buildRemindersMessage, fmtTime } = require('./formatter');
+const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
+const { buildHistoryMessage, buildRemindersMessage, buildWeeklyResponsibility, fmtTime } = require('./formatter');
 const { rescheduleReminders } = require('./reminders');
 const { buildCurrentStatus, sendStatus } = require('./status');
 
@@ -243,6 +243,42 @@ async function handleMessage(message, client) {
     rescheduleReminders();
     await message.reply(`📊 Daily summary will be sent at *${cronToTime(cronExpr)}* every day.`);
     console.log(`[handler] dailySummaryCron → ${cronExpr}`);
+    return;
+  }
+
+  // ── set weekly responsibility auto-summary time ────────────────────────────
+  //   "weeklycron 9pm"  → auto-posts every Sunday at 9pm
+  //   "weeklycron off"  → disables auto-post
+  const weeklyCronMatch = body.match(/^\s*weeklycron\s+(.+)$/i);
+  if (weeklyCronMatch) {
+    const arg = weeklyCronMatch[1].trim();
+    if (/^(off|none|stop)$/i.test(arg)) {
+      delete config.weeklyResponsibilityCron;
+      save();
+      rescheduleReminders();
+      await message.reply('📊 Weekly responsibility auto-summary turned *off*.');
+      return;
+    }
+    const cronExpr = parseTimeToCron(arg);
+    if (!cronExpr) {
+      await message.reply('📊 Couldn\'t understand that time. Try `weeklycron 9pm` (posts every Sunday evening).');
+      return;
+    }
+    // Restrict to Sundays only (field 5: day of week 0 = Sunday)
+    config.weeklyResponsibilityCron = cronExpr.replace(/\* \* \*$/, '* * 0');
+    save();
+    rescheduleReminders();
+    await message.reply(`📊 Weekly responsibility summary will be sent every *Sunday at ${cronToTime(cronExpr)}*.`);
+    console.log(`[handler] weeklyResponsibilityCron → ${config.weeklyResponsibilityCron}`);
+    return;
+  }
+
+  // ── weekly responsibility breakdown ────────────────────────────────────────
+  //   "responsibility" / "responsible" / "weekly" / "who did"
+  if (isResponsibilityRequest(body)) {
+    const { start, end } = currentWeekRange();
+    const rows = db.getWeeklyCompletionsByUser(start, end);
+    await message.reply(buildWeeklyResponsibility(rows, start, end));
     return;
   }
 

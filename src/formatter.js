@@ -1,5 +1,4 @@
-const config = require('../config.json');
-const { describeSchedule } = require('./configStore');
+const { config, describeSchedule } = require('./configStore');
 
 const NUMBER_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
 
@@ -109,4 +108,50 @@ function buildRemindersMessage(cronToTime) {
   return lines.join('\n');
 }
 
-module.exports = { buildStatusMessage, buildHistoryMessage, buildRemindersMessage, fmtTime };
+/**
+ * Builds the weekly responsibility breakdown message.
+ * @param {Array<{user_name: string, task: string, count: number}>} rows
+ * @param {string} weekStart  UTC ISO string — Monday 00:00 local time
+ * @param {string} weekEnd    UTC ISO string — next Monday 00:00 local time (exclusive)
+ */
+function buildWeeklyResponsibility(rows, weekStart, weekEnd) {
+  const tz = config.timezone;
+
+  const fmtDay = (iso) =>
+    new Date(iso).toLocaleDateString('en-GB', {
+      timeZone: tz,
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+
+  // weekEnd is exclusive (next Monday midnight), display the day before
+  const lastMoment = new Date(new Date(weekEnd).getTime() - 1).toISOString();
+  const header = `📊 *Weekly responsibility — ${fmtDay(weekStart)} – ${fmtDay(lastMoment)}*`;
+
+  if (rows.length === 0) {
+    return `${header}\n\nNo tasks logged yet this week.\n\n_Resets Monday_`;
+  }
+
+  // Group by user
+  const byUser = {};
+  for (const row of rows) {
+    if (!byUser[row.user_name]) byUser[row.user_name] = { total: 0, breakdown: [] };
+    byUser[row.user_name].total += row.count;
+    const task = config.tasks.find((t) => t.id === row.task);
+    const label = task ? `${task.emoji || ''} ${task.label}`.trim() : row.task;
+    byUser[row.user_name].breakdown.push(`${label} ×${row.count}`);
+  }
+
+  const lines = [header, ''];
+  for (const [user, data] of Object.entries(byUser)) {
+    lines.push(`• *${user}* — ${data.total} task${data.total === 1 ? '' : 's'} done`);
+    lines.push(`  ${data.breakdown.join(', ')}`);
+  }
+  lines.push('');
+  lines.push('_Resets Monday_');
+
+  return lines.join('\n');
+}
+
+module.exports = { buildStatusMessage, buildHistoryMessage, buildRemindersMessage, buildWeeklyResponsibility, fmtTime };

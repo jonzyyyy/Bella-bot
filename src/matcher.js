@@ -1,4 +1,4 @@
-const config = require('../config.json');
+const { config } = require('./configStore');
 
 /** Parses "HH:MM" into minutes since midnight. */
 function toMinutes(hhmm) {
@@ -76,4 +76,12 @@ function matchHistoryRequest(text) {
   );
 }
 
-module.exports = { matchTask, isStatusRequest, matchHistoryRequest };
+/**
+ * Returns true if the message is asking for the weekly responsibility breakdown.
+ */
+function isResponsibilityRequest(text) {
+  if (!text) return false;
+  return /\b(?:responsib(?:le|ility)|weekly|who\s+did)\b/i.test(text);
+}
+
+module.exports = { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest };

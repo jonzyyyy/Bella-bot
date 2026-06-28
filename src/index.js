@@ -1,16 +1,17 @@
 require('dotenv').config();
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const config = require('../config.json');
+const { config } = require('./configStore');
 const { handleMessage, handleReaction } = require('./handlers');
 const { scheduleReminders } = require('./reminders');
 
 const groupName = process.env.WHATSAPP_GROUP_NAME || config.groupName;
+const authPath  = process.env.BELLA_AUTH || '.wwebjs_auth';
 
 // ── WhatsApp client ────────────────────────────────────────────────────────────
 
 const client = new Client({
-  authStrategy: new LocalAuth({ dataPath: '.wwebjs_auth' }),
+  authStrategy: new LocalAuth({ dataPath: authPath }),
   puppeteer: {
     headless: true,
     args: [
