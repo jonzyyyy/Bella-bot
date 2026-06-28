@@ -1,0 +1,299 @@
+{
+  "petName": "Bella",
+  "groupName": "Bella 🐾",
+  "timezone": "Asia/Singapore",
+  "statusAfterCompletion": true,
+  "dailySummaryCron": "0 21 * * *",
+  "tasks": [
+    {
+      "id": "feed_am",
+      "label": "Breakfast",
+      "emoji": "🍖",
+      "keywords": [
+        "fed",
+        "feed",
+        "feeding",
+        "fed her",
+        "fed him",
+        "breakfast",
+        "bfast",
+        "morning feed"
+      ],
+      "window": {
+        "from": "00:00",
+        "to": "14:00"
+      },
+      "reminders": [
+        {
+          "cron": "0 8 * * *",
+          "message": "Time for Bella's breakfast 🍖"
+        }
+      ]
+    },
+    {
+      "id": "feed_pm",
+      "label": "Dinner",
+      "emoji": "🍖",
+      "keywords": [
+        "fed",
+        "feed",
+        "feeding",
+        "fed her",
+        "fed him",
+        "dinner",
+        "evening feed"
+      ],
+      "window": {
+        "from": "14:00",
+        "to": "23:59"
+      },
+      "reminders": [
+        {
+          "cron": "0 20 * * *",
+          "message": "Time for Bella's dinner 🍖"
+        }
+      ]
+    },
+    {
+      "id": "walk_am",
+      "label": "Morning walk (optional)",
+      "emoji": "🦮",
+      "keywords": [
+        "walked",
+        "walk",
+        "walking",
+        "took her out",
+        "took him out",
+        "morning walk"
+      ],
+      "window": {
+        "from": "00:00",
+        "to": "13:00"
+      },
+      "reminders": []
+    },
+    {
+      "id": "walk_pm",
+      "label": "Evening walk",
+      "emoji": "🦮",
+      "keywords": [
+        "walked",
+        "walk",
+        "walking",
+        "took her out",
+        "took him out",
+        "evening walk",
+        "night walk"
+      ],
+      "window": {
+        "from": "13:00",
+        "to": "23:59"
+      },
+      "reminders": [
+        {
+          "cron": "30 19 * * *",
+          "message": "Time for Bella's evening walk 🦮"
+        },
+        {
+          "cron": "30 20 * * *",
+          "message": "Bella reminder: Evening walk 🦮"
+        }
+      ]
+    },
+    {
+      "id": "water",
+      "label": "Water refilled",
+      "emoji": "💧",
+      "keywords": [
+        "water",
+        "watered",
+        "refilled water",
+        "filled water",
+        "water done"
+      ],
+      "reminders": [
+        {
+          "cron": "0 9 * * *",
+          "message": "Remember to check Bella's water bowl 💧"
+        }
+      ]
+    },
+    {
+      "id": "poop",
+      "label": "Pooped",
+      "emoji": "💩",
+      "multiple": true,
+      "keywords": [
+        "shat",
+        "pooped",
+        "poop",
+        "poo",
+        "did her business"
+      ],
+      "reminders": []
+    },
+    {
+      "id": "ears",
+      "label": "Ears cleaned",
+      "emoji": "👂",
+      "keywords": [
+        "ears",
+        "cleaned ears",
+        "ear clean",
+        "ears done",
+        "cleaned her ears"
+      ],
+      "reminders": [
+        {
+          "cron": "0 19 * * *",
+          "message": "Time to clean Bella's ears 👂"
+        }
+      ],
+      "schedule": {
+        "daysOfWeek": [
+          0,
+          3
+        ]
+      }
+    },
+    {
+      "id": "earmeds",
+      "label": "Ear Medicine",
+      "emoji": "💊",
+      "keywords": [
+        "ear medicine",
+        "ear meds",
+        "earmeds",
+        "ear med",
+        "ear drops",
+        "ear treatment",
+        "ear medication",
+        "meds",
+        "medicine",
+        "pill"
+      ],
+      "reminders": [
+        {
+          "cron": "0 21 * * *",
+          "message": "Time to give Bella her ear medicine 💊"
+        }
+      ]
+    },
+    {
+      "id": "teeth",
+      "label": "Teeth brushed",
+      "emoji": "🦷",
+      "keywords": [
+        "brush teeth",
+        "brushed teeth",
+        "brushed her teeth",
+        "teeth",
+        "brushed",
+        "toothbrush"
+      ],
+      "schedule": {
+        "daysOfWeek": [
+          1
+        ]
+      },
+      "reminders": [
+        {
+          "cron": "30 8 * * *",
+          "message": "Time to brush Bella's teeth 🦷"
+        },
+        {
+          "cron": "30 20 * * *",
+          "message": "Don't forget to brush Bella's teeth tonight 🦷"
+        }
+      ]
+    },
+    {
+      "id": "bath",
+      "label": "Bath (every 1-2 weeks)",
+      "emoji": "🛁",
+      "keywords": [
+        "bath",
+        "bathed",
+        "bathed her",
+        "bathing",
+        "washed her",
+        "wash"
+      ],
+      "schedule": {
+        "everyDays": 7,
+        "anchor": "2026-06-20"
+      },
+      "reminders": []
+    },
+    {
+      "id": "grooming",
+      "label": "Grooming",
+      "emoji": "✂️",
+      "keywords": [
+        "grooming",
+        "groomed",
+        "groomed her",
+        "groom",
+        "groomer"
+      ],
+      "schedule": {
+        "everyMonths": 3,
+        "anchor": "2026-06-28"
+      },
+      "reminders": []
+    },
+    {
+      "id": "nexgard",
+      "label": "NexGard Spectra",
+      "emoji": "🪲",
+      "keywords": [
+        "nexgard",
+        "nexguard",
+        "spectra",
+        "tick tablet",
+        "flea tablet",
+        "heartworm"
+      ],
+      "schedule": {
+        "everyMonths": 1,
+        "anchor": "2026-05-29"
+      },
+      "reminders": [
+        {
+          "cron": "0 9 * * *",
+          "message": "Give Bella her NexGard Spectra today 🪲"
+        },
+        {
+          "cron": "0 19 * * *",
+          "message": "Bella reminder: NexGard Spectra 🪲"
+        }
+      ]
+    },
+    {
+      "id": "drontal",
+      "label": "Drontal (deworm)",
+      "emoji": "🪱",
+      "keywords": [
+        "drontal",
+        "deworm",
+        "dewormer",
+        "worming",
+        "wormer"
+      ],
+      "schedule": {
+        "everyMonths": 3,
+        "anchor": "2026-04-06"
+      },
+      "reminders": [
+        {
+          "cron": "0 9 * * *",
+          "message": "Bella's Drontal (deworming) is due 🪱"
+        },
+        {
+          "cron": "0 19 * * *",
+          "message": "Bella reminder: Drontal (deworm) 🪱"
+        }
+      ]
+    }
+  ]
+}
