@@ -5,7 +5,8 @@ const fs = require('fs');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-const db = new Database(path.join(DATA_DIR, 'bella.db'));
+const DB_FILE = process.env.BELLA_DB || 'bella.db';
+const db = new Database(path.join(DATA_DIR, DB_FILE));
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS completions (
@@ -112,6 +113,14 @@ function removeStatusMessage(id) {
   db.prepare('DELETE FROM status_messages WHERE id = ?').run(id);
 }
 
+function getWeeklyCompletionsByUser(startISO, endISO) {
+  return db
+    .prepare(
+      'SELECT user_name, task, COUNT(*) as count FROM completions WHERE timestamp >= ? AND timestamp < ? GROUP BY user_name, task ORDER BY user_name, count DESC'
+    )
+    .all(startISO, endISO);
+}
+
 function undoLastCompletion(task) {
   const row = db
     .prepare('SELECT id, timestamp FROM completions WHERE task = ? ORDER BY timestamp DESC LIMIT 1')
@@ -134,4 +143,5 @@ module.exports = {
   getLatestStatusMessage,
   removeStatusMessage,
   undoLastCompletion,
+  getWeeklyCompletionsByUser,
 };

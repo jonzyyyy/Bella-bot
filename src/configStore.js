@@ -1,9 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const config = require('../config.json'); // Node caches this — same object everywhere
 const db = require('./db');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
+// Allow a different config file for test instances via BELLA_CONFIG env var.
+const CONFIG_PATH = path.resolve(__dirname, '..', process.env.BELLA_CONFIG || 'config.json');
+const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
 
 /**
  * Persists the in-memory config object back to config.json on disk.
@@ -320,6 +321,30 @@ function setTaskSchedule(taskId, tokens) {
 }
 
 /**
+ * Returns the UTC ISO timestamps for the start and end of the current week
+ * (Monday 00:00 → next Monday 00:00) in the configured timezone.
+ */
+function currentWeekRange() {
+  const now = new Date();
+  // Build a "fake" Date whose calendar fields (getDay, getDate, etc.) reflect
+  // the configured local timezone — same trick used in isActiveToday().
+  const local = new Date(now.toLocaleString('en-US', { timeZone: config.timezone }));
+  const fakeOffset = local.getTime() - now.getTime();
+
+  const dow = local.getDay(); // 0=Sun … 6=Sat
+  const daysSinceMonday = (dow + 6) % 7;
+
+  const mondayLocal = new Date(local);
+  mondayLocal.setDate(mondayLocal.getDate() - daysSinceMonday);
+  mondayLocal.setHours(0, 0, 0, 0);
+
+  const weekStart = new Date(mondayLocal.getTime() - fakeOffset);
+  const weekEnd   = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  return { start: weekStart.toISOString(), end: weekEnd.toISOString() };
+}
+
+/**
  * Removes a task by id.
  * @returns {{ ok: true, task } | { ok: false, error: string }}
  */
@@ -345,6 +370,7 @@ module.exports = {
   isActiveToday,
   describeSchedule,
   nextDueDate,
+  currentWeekRange,
   getTask,
   setTaskTimes,
   setTaskSchedule,

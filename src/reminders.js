@@ -1,7 +1,8 @@
 const cron = require('node-cron');
-const { config, isActiveToday } = require('./configStore');
+const { config, isActiveToday, currentWeekRange } = require('./configStore');
 const db = require('./db');
 const { buildCurrentStatus } = require('./status');
+const { buildWeeklyResponsibility } = require('./formatter');
 
 function buildDisclaimer(task) {
   const example = task.keywords[0] || task.id;
@@ -91,6 +92,32 @@ function scheduleReminders(client, getGroupChatId) {
     );
     scheduledJobs.push(summaryJob);
     console.log(`[reminders] Scheduled daily summary → ${config.dailySummaryCron} (${config.timezone})`);
+  }
+
+  // Weekly responsibility breakdown — posts every Sunday at the configured time.
+  if (config.weeklyResponsibilityCron) {
+    const weeklyJob = cron.schedule(
+      config.weeklyResponsibilityCron,
+      async () => {
+        const chatId = getGroupChatId();
+        if (!chatId) {
+          console.warn('[reminders] Group not found yet, skipping weekly summary');
+          return;
+        }
+        try {
+          const { start, end } = currentWeekRange();
+          const rows = db.getWeeklyCompletionsByUser(start, end);
+          const chat = await client.getChatById(chatId);
+          await chat.sendMessage(buildWeeklyResponsibility(rows, start, end));
+          console.log('[reminders] Sent weekly responsibility summary');
+        } catch (err) {
+          console.error('[reminders] Failed to send weekly summary:', err.message);
+        }
+      },
+      { timezone: config.timezone }
+    );
+    scheduledJobs.push(weeklyJob);
+    console.log(`[reminders] Scheduled weekly responsibility summary → ${config.weeklyResponsibilityCron} (${config.timezone})`);
   }
 }
 
