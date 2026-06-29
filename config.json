@@ -158,29 +158,6 @@
       }
     },
     {
-      "id": "earmeds",
-      "label": "Ear Medicine",
-      "emoji": "💊",
-      "keywords": [
-        "ear medicine",
-        "ear meds",
-        "earmeds",
-        "ear med",
-        "ear drops",
-        "ear treatment",
-        "ear medication",
-        "meds",
-        "medicine",
-        "pill"
-      ],
-      "reminders": [
-        {
-          "cron": "0 21 * * *",
-          "message": "Time to give Bella her ear medicine 💊"
-        }
-      ]
-    },
-    {
       "id": "teeth",
       "label": "Teeth brushed",
       "emoji": "🦷",
