@@ -113,6 +113,15 @@ function removeStatusMessage(id) {
   db.prepare('DELETE FROM status_messages WHERE id = ?').run(id);
 }
 
+function getLastCompletionWithinMinutes(task, minutes) {
+  const cutoff = new Date(Date.now() - minutes * 60 * 1000);
+  return db
+    .prepare(
+      'SELECT * FROM completions WHERE task = ? AND timestamp >= ? ORDER BY timestamp DESC LIMIT 1'
+    )
+    .get(task, cutoff.toISOString());
+}
+
 function getWeeklyCompletionsByUser(startISO, endISO) {
   return db
     .prepare(
@@ -143,5 +152,6 @@ module.exports = {
   getLatestStatusMessage,
   removeStatusMessage,
   undoLastCompletion,
+  getLastCompletionWithinMinutes,
   getWeeklyCompletionsByUser,
 };

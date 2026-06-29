@@ -14,7 +14,11 @@ const { buildCurrentStatus, sendStatus } = require('./status');
 // Markers that identify the bot's own output, so we never react to ourselves
 // and trigger an infinite loop (e.g. the status summary contains "Walked",
 // which would otherwise re-match the walk keyword).
-const BOT_MARKERS = ['🐾', '📋', '⏰', '🆕', '🗑️', '♻️', '🔔', '🗓️', '⚙️', '📊'];
+const BOT_MARKERS = ['🐾', '📋', '⏰', '🆕', '🗑️', '♻️', '🔔', '🗓️', '⚙️', '📊', '⚠️'];
+
+// Pending duplicate confirmations — keyed by chat ID, cleared after 5 min or on response.
+// { task, triggeredBy, when (Date|null), expiresAt (ms timestamp) }
+const pendingConfirmations = new Map();
 
 async function handleMessage(message, client) {
   const body = message.body || '';
@@ -45,6 +49,29 @@ async function handleMessage(message, client) {
       if (authorId) userName = authorId.split('@')[0];
     }
     console.warn('[handler] Could not resolve contact:', err.message);
+  }
+
+  const chatId = message.id?.remote ?? message.from;
+
+  // ── duplicate confirmation response ────────────────────────────────────────
+  //   If there's a pending "are you sure?" for this chat, handle yes/no first.
+  const pending = pendingConfirmations.get(chatId);
+  if (pending) {
+    if (/^\s*y(?:es|ep|eah)?\s*$|^\s*confirm\s*$/i.test(body)) {
+      pendingConfirmations.delete(chatId);
+      if (Date.now() < pending.expiresAt) {
+        db.logCompletion(pending.task.id, pending.triggeredBy, pending.when?.toISOString());
+        await message.react('✅');
+        if (config.statusAfterCompletion) await sendStatus(message, client);
+        console.log(`[handler] Confirmed duplicate "${pending.task.id}" by ${pending.triggeredBy}`);
+      }
+      return;
+    }
+    if (/^\s*no\b|^\s*nope\b|^\s*cancel\b/i.test(body)) {
+      pendingConfirmations.delete(chatId);
+      await message.reply(`⚠️ Got it — *${pending.task.label}* not logged again.`);
+      return;
+    }
   }
 
   // ── history request ────────────────────────────────────────────────────────
@@ -294,6 +321,24 @@ async function handleMessage(message, client) {
   const when = extractTimeFromText(body);
   const task = matchTask(body, when || new Date());
   if (task) {
+    // For tasks that don't allow multiple completions, check for a recent duplicate.
+    if (!task.multiple) {
+      const recent = db.getLastCompletionWithinMinutes(task.id, 30);
+      if (recent) {
+        const minsAgo = Math.max(1, Math.round((Date.now() - new Date(recent.timestamp).getTime()) / 60000));
+        pendingConfirmations.set(chatId, {
+          task,
+          triggeredBy: userName,
+          when: when || null,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        });
+        await message.reply(
+          `⚠️ *${task.label}* was already logged ${minsAgo} min ago by ${recent.user_name}.\n\nReply *yes* to log again, or ignore to cancel.`
+        );
+        return;
+      }
+    }
+
     db.logCompletion(task.id, userName, when ? when.toISOString() : undefined);
     await message.react('✅');
     if (config.statusAfterCompletion) await sendStatus(message, client);
