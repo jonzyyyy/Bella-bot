@@ -272,6 +272,27 @@
           "message": "Bella reminder: Drontal (deworm) 🪱"
         }
       ]
+    },
+    {
+      "id": "vaccination",
+      "label": "Annual Vaccination",
+      "emoji": "💉",
+      "keywords": [
+        "vaccination",
+        "vaccine",
+        "vaccinated",
+        "jab"
+      ],
+      "schedule": {
+        "everyMonths": 12,
+        "anchor": "2026-06-30"
+      },
+      "reminders": [
+        {
+          "cron": "0 9 * * *",
+          "message": "Bella's annual vaccination is due 💉"
+        }
+      ]
     }
   ]
 }
