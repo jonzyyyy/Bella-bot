@@ -151,10 +151,8 @@
         }
       ],
       "schedule": {
-        "daysOfWeek": [
-          0,
-          3
-        ]
+        "everyDays": 3,
+        "anchor": "2026-06-30"
       }
     },
     {
@@ -170,9 +168,8 @@
         "toothbrush"
       ],
       "schedule": {
-        "daysOfWeek": [
-          1
-        ]
+        "everyDays": 7,
+        "anchor": "2026-06-30"
       },
       "reminders": [
         {
