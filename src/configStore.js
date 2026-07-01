@@ -321,6 +321,23 @@ function setTaskSchedule(taskId, tokens) {
 }
 
 /**
+ * Returns UTC ISO timestamps covering a full local-timezone day for a given
+ * "YYYY-MM-DD" date string (interpreted in the configured timezone).
+ */
+function dayBoundsUTC(dateStr) {
+  const now = new Date();
+  const local = new Date(now.toLocaleString('en-US', { timeZone: config.timezone }));
+  const fakeOffset = local.getTime() - now.getTime();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const startFake = new Date(y, m - 1, d, 0, 0, 0, 0);
+  const endFake   = new Date(y, m - 1, d + 1, 0, 0, 0, 0);
+  return {
+    start: new Date(startFake.getTime() - fakeOffset).toISOString(),
+    end:   new Date(endFake.getTime()   - fakeOffset).toISOString(),
+  };
+}
+
+/**
  * Returns the UTC ISO timestamps for the start and end of the current week
  * (Monday 00:00 → next Monday 00:00) in the configured timezone.
  */
@@ -370,6 +387,7 @@ module.exports = {
   isActiveToday,
   describeSchedule,
   nextDueDate,
+  dayBoundsUTC,
   currentWeekRange,
   getTask,
   setTaskTimes,

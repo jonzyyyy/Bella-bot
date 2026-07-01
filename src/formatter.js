@@ -22,13 +22,14 @@ function fmtDate(isoString) {
  * Builds the daily status summary message.
  * @param {Array<{task: object, completions: Array}>} taskData
  */
-function buildStatusMessage(taskData) {
-  const today = new Date().toLocaleDateString('en-GB', {
+function buildStatusMessage(taskData, date = new Date()) {
+  const dateLabel = new Date(date).toLocaleDateString('en-GB', {
+    timeZone: config.timezone,
     day: 'numeric',
     month: 'long',
   });
 
-  const lines = [`🐾 *${config.petName}'s Tasks — ${today}*`];
+  const lines = [`🐾 *${config.petName}'s Tasks — ${dateLabel}*`];
 
   taskData.forEach(({ task, completions, daysOverdue = 0 }, i) => {
     const num = NUMBER_EMOJIS[i] ?? `${i + 1}.`;

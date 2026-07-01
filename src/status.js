@@ -84,4 +84,26 @@ async function sendStatus(replyTarget, client) {
   }
 }
 
-module.exports = { buildCurrentStatus, buildEODStatus, sendStatus };
+/**
+ * Builds a status summary for a past date.
+ * Shows all daily (unscheduled) tasks with ✅/❌, plus any scheduled task
+ * that was actually completed that day.
+ * @param {string} dateStr   "YYYY-MM-DD" in the configured timezone
+ * @param {string} startISO  UTC start of that local day
+ * @param {string} endISO    UTC end of that local day (exclusive)
+ */
+function buildHistoricalStatus(dateStr, startISO, endISO) {
+  const taskData = [];
+  for (const task of config.tasks) {
+    const completions = db.getCompletionsBetween(task.id, startISO, endISO);
+    if (!task.schedule) {
+      taskData.push({ task, completions, daysOverdue: 0 });
+    } else if (completions.length > 0) {
+      taskData.push({ task, completions, daysOverdue: 0 });
+    }
+  }
+  // Pass the date so the header shows the correct day, not today.
+  return buildStatusMessage(taskData, new Date(startISO));
+}
+
+module.exports = { buildCurrentStatus, buildEODStatus, buildHistoricalStatus, sendStatus };

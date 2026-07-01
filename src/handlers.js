@@ -1,12 +1,12 @@
 const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
-  extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange,
+  extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange, dayBoundsUTC,
 } = require('./configStore');
 const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
 const { buildHistoryMessage, buildRemindersMessage, buildWeeklyResponsibility, fmtTime } = require('./formatter');
 const { rescheduleReminders } = require('./reminders');
-const { buildCurrentStatus, sendStatus } = require('./status');
+const { buildCurrentStatus, buildHistoricalStatus, sendStatus } = require('./status');
 
 /**
  * Handles an incoming text message.
@@ -19,6 +19,46 @@ const BOT_MARKERS = ['🐾', '📋', '⏰', '🆕', '🗑️', '♻️', '🔔',
 // Pending duplicate confirmations — keyed by chat ID, cleared after 5 min or on response.
 // { task, triggeredBy, when (Date|null), expiresAt (ms timestamp) }
 const pendingConfirmations = new Map();
+
+const MONTH_MAP = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+  january: 0, february: 1, march: 2, april: 3, june: 5,
+  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+};
+
+/**
+ * Parses a date argument ("yesterday", "28 jun", "jun 28") into a
+ * "YYYY-MM-DD" string in the configured timezone, or null if unrecognised.
+ */
+function parseDateArg(arg) {
+  const s = arg.trim().toLowerCase();
+  const tz = config.timezone;
+  const nowLocal = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // "YYYY-MM-DD"
+  const [ny, nm, nd] = nowLocal.split('-').map(Number);
+
+  if (s === 'yesterday') {
+    const d = new Date(ny, nm - 1, nd - 1);
+    return d.toLocaleDateString('en-CA');
+  }
+
+  // "28 jun" / "jun 28" / "28 june"
+  const m1 = s.match(/^(\d{1,2})\s+([a-z]+)$/);
+  const m2 = s.match(/^([a-z]+)\s+(\d{1,2})$/);
+  const hit = m1 || m2;
+  if (hit) {
+    const day   = parseInt(m1 ? hit[1] : hit[2], 10);
+    const mon   = MONTH_MAP[m1 ? hit[2] : hit[1]];
+    if (mon === undefined || day < 1 || day > 31) return null;
+    // Use current year; if the resulting date is in the future, step back a year.
+    let year = ny;
+    const candidate = new Date(year, mon, day);
+    if (candidate > new Date()) year -= 1;
+    return new Date(year, mon, day).toLocaleDateString('en-CA');
+  }
+
+  return null;
+}
 
 async function handleMessage(message, client) {
   const body = message.body || '';
@@ -310,7 +350,19 @@ async function handleMessage(message, client) {
   }
 
   // ── status request ─────────────────────────────────────────────────────────
+  //   "status"            → today's live status
+  //   "status yesterday"  → previous day's summary
+  //   "status 28 jun"     → specific date summary
   if (isStatusRequest(body)) {
+    const dateArg = body.replace(/status/i, '').trim();
+    if (dateArg) {
+      const dateStr = parseDateArg(dateArg);
+      if (dateStr) {
+        const { start, end } = dayBoundsUTC(dateStr);
+        await message.reply(buildHistoricalStatus(dateStr, start, end));
+        return;
+      }
+    }
     await sendStatus(message, client);
     return;
   }
