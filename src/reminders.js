@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const { config, isActiveToday, currentWeekRange } = require('./configStore');
 const db = require('./db');
-const { buildCurrentStatus } = require('./status');
+const { buildCurrentStatus, buildEODStatus } = require('./status');
 const { buildWeeklyResponsibility } = require('./formatter');
 
 function buildDisclaimer(task) {
@@ -81,7 +81,7 @@ function scheduleReminders(client, getGroupChatId) {
         }
         try {
           const chat = await client.getChatById(chatId);
-          const text = `📊 *End-of-day check* — everything should be done by now:\n\n${buildCurrentStatus()}`;
+          const text = `📊 *End-of-day check* — everything should be done by now:\n\n${buildEODStatus()}`;
           await chat.sendMessage(text);
           console.log('[reminders] Sent daily summary');
         } catch (err) {
