@@ -17,22 +17,12 @@ function buildTaskEntry(task, todayMidnight) {
   return { task, completions, daysOverdue };
 }
 
-/** Builds the current day's status summary string (only tasks active today). */
-function buildCurrentStatus() {
-  const todayMidnight = new Date();
-  todayMidnight.setHours(0, 0, 0, 0);
-  const taskData = config.tasks
-    .filter((task) => isActiveToday(task))
-    .map((task) => buildTaskEntry(task, todayMidnight));
-  return buildStatusMessage(taskData);
-}
-
 /**
- * Like buildCurrentStatus but also appends any task that was completed today
- * even if it wasn't scheduled for today (e.g. bath, vaccination done early).
- * Used for the end-of-day summary.
+ * Builds the current day's status summary. Shows all tasks due today plus
+ * any task completed today even if it wasn't scheduled (e.g. bath done early,
+ * teeth brushed outside their weekly window).
  */
-function buildEODStatus() {
+function buildCurrentStatus() {
   const todayMidnight = new Date();
   todayMidnight.setHours(0, 0, 0, 0);
   const seen = new Set();
@@ -44,7 +34,6 @@ function buildEODStatus() {
     taskData.push(buildTaskEntry(task, todayMidnight));
   }
 
-  // Append interval/scheduled tasks completed today that weren't in the active list
   for (const task of config.tasks) {
     if (seen.has(task.id)) continue;
     const completions = db.getCompletionsToday(task.id);
@@ -53,6 +42,8 @@ function buildEODStatus() {
 
   return buildStatusMessage(taskData);
 }
+
+const buildEODStatus = buildCurrentStatus;
 
 /** YYYY-MM-DD in the configured timezone. */
 function todayStr() {
