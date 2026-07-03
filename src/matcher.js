@@ -48,10 +48,12 @@ function matchTask(text, now = new Date()) {
   const windowed = candidates.find((c) => windowCoversNow(c.task, now));
   if (windowed) return windowed.task;
 
-  // Outside all windows — pick the window whose start time is soonest in the
-  // future (e.g. midnight → AM is next), or if all windows have passed today,
-  // the one that ended most recently (e.g. 3pm → AM just passed, PM upcoming →
-  // pick PM since it starts soonest).
+  // Outside all windows — prefer a windowless candidate (e.g. poop_extra)
+  // over forcing into the wrong time-window bucket.
+  const noWindow = candidates.find((c) => !c.task.window);
+  if (noWindow) return noWindow.task;
+
+  // Last resort: pick the window whose start is soonest in the future.
   const windowedCandidates = candidates.filter((c) => c.task.window);
   if (windowedCandidates.length > 0) {
     const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -64,7 +66,6 @@ function matchTask(text, now = new Date()) {
       upcoming.sort((a, b) => a.delta - b.delta);
       return upcoming[0].c.task;
     }
-    // All windows passed — pick the most recently ended one
     withDelta.sort((a, b) => b.delta - a.delta);
     return withDelta[0].c.task;
   }

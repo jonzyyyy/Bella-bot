@@ -154,6 +154,20 @@
       "reminders": []
     },
     {
+      "id": "poop_extra",
+      "label": "Extra poop",
+      "emoji": "💩",
+      "multiple": true,
+      "keywords": [
+        "shat",
+        "pooped",
+        "poop",
+        "poo",
+        "did her business"
+      ],
+      "reminders": []
+    },
+    {
       "id": "ears",
       "label": "Ears cleaned",
       "emoji": "👂",
