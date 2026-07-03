@@ -371,7 +371,17 @@ async function handleMessage(message, client) {
   // An explicit time in the message ("shat 8:30am", "fed her 7pm") sets both
   // the routing window and the logged timestamp; otherwise we use now.
   const when = extractTimeFromText(body);
-  const task = matchTask(body, when || new Date());
+  let task = matchTask(body, when || new Date());
+
+  // If a windowed poop slot is already logged today, overflow to poop_extra.
+  if (task && (task.id === 'poop_am' || task.id === 'poop_pm')) {
+    const alreadyDone = db.getCompletionsToday(task.id);
+    if (alreadyDone.length > 0) {
+      const extra = config.tasks.find((t) => t.id === 'poop_extra');
+      if (extra) task = extra;
+    }
+  }
+
   if (task) {
     // For tasks that don't allow multiple completions, check for a recent duplicate.
     if (!task.multiple) {
