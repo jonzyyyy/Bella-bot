@@ -120,10 +120,9 @@
       ]
     },
     {
-      "id": "poop",
-      "label": "Pooped",
+      "id": "poop_am",
+      "label": "Morning poop",
       "emoji": "💩",
-      "multiple": true,
       "keywords": [
         "shat",
         "pooped",
@@ -131,6 +130,27 @@
         "poo",
         "did her business"
       ],
+      "window": {
+        "from": "05:00",
+        "to": "12:00"
+      },
+      "reminders": []
+    },
+    {
+      "id": "poop_pm",
+      "label": "Evening poop",
+      "emoji": "💩",
+      "keywords": [
+        "shat",
+        "pooped",
+        "poop",
+        "poo",
+        "did her business"
+      ],
+      "window": {
+        "from": "17:00",
+        "to": "23:59"
+      },
       "reminders": []
     },
     {

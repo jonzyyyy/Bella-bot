@@ -46,7 +46,30 @@ function matchTask(text, now = new Date()) {
   // Tie-break by time-of-day window (uses `now`, which may be an explicit
   // time parsed from the message, e.g. "fed her 7pm").
   const windowed = candidates.find((c) => windowCoversNow(c.task, now));
-  return (windowed || candidates[0]).task;
+  if (windowed) return windowed.task;
+
+  // Outside all windows — pick the window whose start time is soonest in the
+  // future (e.g. midnight → AM is next), or if all windows have passed today,
+  // the one that ended most recently (e.g. 3pm → AM just passed, PM upcoming →
+  // pick PM since it starts soonest).
+  const windowedCandidates = candidates.filter((c) => c.task.window);
+  if (windowedCandidates.length > 0) {
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const withDelta = windowedCandidates.map((c) => ({
+      c,
+      delta: toMinutes(c.task.window.from) - nowMins,
+    }));
+    const upcoming = withDelta.filter((w) => w.delta > 0);
+    if (upcoming.length > 0) {
+      upcoming.sort((a, b) => a.delta - b.delta);
+      return upcoming[0].c.task;
+    }
+    // All windows passed — pick the most recently ended one
+    withDelta.sort((a, b) => b.delta - a.delta);
+    return withDelta[0].c.task;
+  }
+
+  return candidates[0].task;
 }
 
 /**
