@@ -248,7 +248,7 @@
       ],
       "schedule": {
         "everyMonths": 3,
-        "anchor": "2026-06✖️-28"
+        "anchor": "2026-06-28"
       },
       "reminders": []
     },
