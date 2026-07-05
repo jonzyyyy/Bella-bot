@@ -95,7 +95,21 @@ function nextDueDate(task) {
   const last = db.getLastCompletion(task.id);
   const baseline = last ? new Date(last.timestamp) : anchor;
   if (!baseline) return null;
-  return s.everyMonths ? addMonths(baseline, s.everyMonths) : addDays(baseline, s.everyDays);
+  const computed = s.everyMonths ? addMonths(baseline, s.everyMonths) : addDays(baseline, s.everyDays);
+  if (s.deferredUntil) {
+    const deferred = new Date(s.deferredUntil + 'T00:00:00');
+    return deferred > computed ? deferred : computed;
+  }
+  return computed;
+}
+
+/** Clears any active deferral on a task (called after the task is logged). */
+function clearTaskDeferral(taskId) {
+  const task = getTask(taskId);
+  if (!task?.schedule) return;
+  delete task.schedule.deferredUntil;
+  delete task.schedule.deferralInfo;
+  save();
 }
 
 /**
@@ -387,6 +401,7 @@ module.exports = {
   isActiveToday,
   describeSchedule,
   nextDueDate,
+  clearTaskDeferral,
   dayBoundsUTC,
   currentWeekRange,
   getTask,

@@ -1,7 +1,7 @@
 const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
   extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange, dayBoundsUTC,
-  nextDueDate,
+  nextDueDate, clearTaskDeferral,
 } = require('./configStore');
 const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
@@ -457,23 +457,31 @@ async function handleMessage(message, client) {
     if (config.statusAfterCompletion) await sendStatus(message, client);
     console.log(`[handler] ${userName} completed "${task.id}"${when ? ' at ' + when.toLocaleTimeString() : ''}`);
 
-    // After logging NexGard, warn if Drontal is due within the next 7 days.
+    // After logging NexGard, auto-defer Drontal if the next due date falls
+    // within 7 days of this NexGard dose.
     if (task.id === 'nexgard') {
       const drontalTask = getTask('drontal');
       if (drontalTask) {
+        const now = when || new Date();
+        const safeDate = new Date(now.getTime() + 7 * MS_DAY);
         const due = nextDueDate(drontalTask);
-        if (due) {
-          const now = when || new Date();
-          const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / MS_DAY);
-          if (daysUntilDue >= 0 && daysUntilDue <= 7) {
-            const safeDate = new Date(now.getTime() + 7 * MS_DAY);
-            const safeDateStr = safeDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: config.timezone });
-            await message.reply(
-              `⚠️ *Drontal is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}* — do NOT give it yet.\n\n_Wait until at least *${safeDateStr}* (7 days after NexGard)._`
-            );
-          }
+        if (due && safeDate > due) {
+          const delayDays = Math.ceil((safeDate.getTime() - due.getTime()) / MS_DAY);
+          const safeDateStr = safeDate.toLocaleDateString('en-CA', { timeZone: config.timezone }); // YYYY-MM-DD
+          const displayStr = safeDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: config.timezone });
+          drontalTask.schedule.deferredUntil = safeDateStr;
+          drontalTask.schedule.deferralInfo = `delayed ${delayDays}d — NexGard`;
+          save();
+          await message.reply(
+            `⚠️ Drontal deferred by *${delayDays} day${delayDays === 1 ? '' : 's'}* to *${displayStr}* to keep 7 days clear of NexGard.`
+          );
         }
       }
+    }
+
+    // Clear any deferral once Drontal is actually given.
+    if (task.id === 'drontal') {
+      clearTaskDeferral('drontal');
     }
   }
 }
