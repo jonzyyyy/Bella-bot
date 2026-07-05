@@ -21,6 +21,20 @@ function save() {
  */
 function parseTimeToCron(input) {
   const s = String(input).trim().toLowerCase();
+
+  // Compact no-colon format: "230pm" → 2:30pm, "1130am" → 11:30am
+  const compact = s.match(/^(\d{3,4})\s*(am|pm)$/);
+  if (compact) {
+    const digits = compact[1];
+    const min = parseInt(digits.slice(-2), 10);
+    let hour = parseInt(digits.slice(0, -2), 10);
+    const ampm = compact[2];
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    if (hour > 23 || min > 59) return null;
+    return `${min} ${hour} * * *`;
+  }
+
   const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
   if (!m) return null;
 
@@ -51,7 +65,8 @@ function parseTimeToDate(input) {
  * ("fed her 2 times" must NOT parse as 2am).
  */
 function extractTimeFromText(text) {
-  const m = String(text).match(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))\b/i);
+  // Order: colon format first, then compact no-colon (e.g. "230pm"), then plain hour+ampm.
+  const m = String(text).match(/\b(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{3,4}\s*(?:am|pm)|\d{1,2}\s*(?:am|pm))\b/i);
   if (!m) return null;
   return parseTimeToDate(m[1].replace(/\s+/g, ''));
 }
