@@ -51,6 +51,25 @@ function scheduleReminders(client, getGroupChatId) {
           }
           try {
             const chat = await client.getChatById(chatId);
+
+            // Drontal spacing check: if NexGard was given within the last 7 days,
+            // replace the normal reminder with a warning not to give the pill yet.
+            if (task.id === 'drontal') {
+              const lastNexgard = db.getLastCompletion('nexgard');
+              if (lastNexgard) {
+                const daysSince = Math.round((Date.now() - new Date(lastNexgard.timestamp).getTime()) / 86400000);
+                if (daysSince < 7) {
+                  const safeDate = new Date(new Date(lastNexgard.timestamp).getTime() + 7 * 86400000);
+                  const safeDateStr = safeDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: config.timezone });
+                  await chat.sendMessage(
+                    `⚠️ *Drontal is due today* but NexGard was given ${daysSince} day${daysSince === 1 ? '' : 's'} ago.\n\n_Do NOT give Drontal yet — wait until at least *${safeDateStr}* (7 days after NexGard)._`
+                  );
+                  console.log(`[reminders] Sent drontal spacing warning (nexgard ${daysSince}d ago)`);
+                  return;
+                }
+              }
+            }
+
             // Prefix with 🔔 so the bot recognises (and ignores) its own
             // reminders — the disclaimer text contains "fed her" as an example,
             // which would otherwise be read as a feed completion.

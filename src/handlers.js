@@ -456,6 +456,25 @@ async function handleMessage(message, client) {
     await message.react('✅');
     if (config.statusAfterCompletion) await sendStatus(message, client);
     console.log(`[handler] ${userName} completed "${task.id}"${when ? ' at ' + when.toLocaleTimeString() : ''}`);
+
+    // After logging NexGard, warn if Drontal is due within the next 7 days.
+    if (task.id === 'nexgard') {
+      const drontalTask = getTask('drontal');
+      if (drontalTask) {
+        const due = nextDueDate(drontalTask);
+        if (due) {
+          const now = when || new Date();
+          const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / MS_DAY);
+          if (daysUntilDue >= 0 && daysUntilDue <= 7) {
+            const safeDate = new Date(now.getTime() + 7 * MS_DAY);
+            const safeDateStr = safeDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: config.timezone });
+            await message.reply(
+              `⚠️ *Drontal is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}* — do NOT give it yet.\n\n_Wait until at least *${safeDateStr}* (7 days after NexGard)._`
+            );
+          }
+        }
+      }
+    }
   }
 }
 
