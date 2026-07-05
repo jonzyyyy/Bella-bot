@@ -1,6 +1,7 @@
 const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
   extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange, dayBoundsUTC,
+  nextDueDate,
 } = require('./configStore');
 const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
@@ -55,6 +56,43 @@ function parseDateArg(arg) {
     const candidate = new Date(year, mon, day);
     if (candidate > new Date()) year -= 1;
     return new Date(year, mon, day).toLocaleDateString('en-CA');
+  }
+
+  return null;
+}
+
+const MS_DAY = 86400000;
+
+/**
+ * Returns a warning string if logging `taskId` would violate a medication
+ * spacing rule, or null if it's safe to proceed.
+ *   drontal: must be ≥ 3 months since last dose, and ≥ 7 days from NexGard
+ *   nexgard: must be ≥ 7 days from Drontal
+ */
+function checkMedConflict(taskId, now) {
+  if (taskId === 'drontal') {
+    const due = nextDueDate(getTask('drontal'));
+    if (due && due > now) {
+      const days = Math.ceil((due.getTime() - now.getTime()) / MS_DAY);
+      return `Drontal isn't due for another *${days} day${days === 1 ? '' : 's'}* — last dose was too recent (every 3 months).`;
+    }
+    const lastNexgard = db.getLastCompletion('nexgard');
+    if (lastNexgard) {
+      const days = Math.round((now.getTime() - new Date(lastNexgard.timestamp).getTime()) / MS_DAY);
+      if (days < 7) {
+        return `NexGard was given *${days} day${days === 1 ? '' : 's'} ago* — Drontal should be at least 7 days apart.`;
+      }
+    }
+  }
+
+  if (taskId === 'nexgard') {
+    const lastDrontal = db.getLastCompletion('drontal');
+    if (lastDrontal) {
+      const days = Math.round((now.getTime() - new Date(lastDrontal.timestamp).getTime()) / MS_DAY);
+      if (days < 7) {
+        return `Drontal was given *${days} day${days === 1 ? '' : 's'} ago* — NexGard should be at least 7 days apart.`;
+      }
+    }
   }
 
   return null;
@@ -383,6 +421,19 @@ async function handleMessage(message, client) {
   }
 
   if (task) {
+    // Medication spacing rules (drontal / nexgard).
+    const medWarning = checkMedConflict(task.id, when || new Date());
+    if (medWarning) {
+      pendingConfirmations.set(chatId, {
+        task,
+        triggeredBy: userName,
+        when: when || null,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      });
+      await message.reply(`⚠️ ${medWarning}\n\nReply *yes* to log anyway, or ignore to cancel.`);
+      return;
+    }
+
     // For tasks that don't allow multiple completions, check for a recent duplicate.
     if (!task.multiple) {
       const recent = db.getLastCompletionWithinMinutes(task.id, 30);
