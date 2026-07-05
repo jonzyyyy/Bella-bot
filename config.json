@@ -59,6 +59,7 @@
       "id": "walk_am",
       "label": "Morning walk (optional)",
       "emoji": "🦮",
+      "optional": true,
       "keywords": [
         "walked",
         "walk",
@@ -247,7 +248,7 @@
       ],
       "schedule": {
         "everyMonths": 3,
-        "anchor": "2026-06-28"
+        "anchor": "2026-06✖️-28"
       },
       "reminders": []
     },

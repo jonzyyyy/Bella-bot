@@ -38,7 +38,8 @@ function buildStatusMessage(taskData, date = new Date()) {
         ? ` _(${daysOverdue} day${daysOverdue === 1 ? '' : 's'} overdue)_`
         : '';
       const deferred = task.schedule?.deferralInfo ? ` _(${task.schedule.deferralInfo})_` : '';
-      lines.push(`${num} ${task.label} ❌${overdue}${deferred}`);
+      const icon = task.optional ? '✖' : '❌';
+      lines.push(`${num} ${task.label} ${icon}${overdue}${deferred}`);
     } else if (task.multiple) {
       // Tasks that can happen several times a day (e.g. poop) — list them all.
       const all = completions
