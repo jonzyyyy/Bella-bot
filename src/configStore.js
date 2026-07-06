@@ -110,10 +110,19 @@ function nextDueDate(task) {
   const last = db.getLastCompletion(task.id);
   const baseline = last ? new Date(last.timestamp) : anchor;
   if (!baseline) return null;
-  const computed = s.everyMonths ? addMonths(baseline, s.everyMonths) : addDays(baseline, s.everyDays);
+  let computed = s.everyMonths ? addMonths(baseline, s.everyMonths) : addDays(baseline, s.everyDays);
   if (s.deferredUntil) {
     const deferred = new Date(s.deferredUntil + 'T00:00:00');
-    return deferred > computed ? deferred : computed;
+    if (deferred > computed) computed = deferred;
+  }
+  // Drontal must be at least 7 days after the last NexGard — enforced dynamically
+  // so it's always correct regardless of when NexGard was logged.
+  if (task.id === 'drontal') {
+    const lastNexgard = db.getLastCompletion('nexgard');
+    if (lastNexgard) {
+      const safeAfter = new Date(new Date(lastNexgard.timestamp).getTime() + 7 * 86400000);
+      if (safeAfter > computed) computed = safeAfter;
+    }
   }
   return computed;
 }
