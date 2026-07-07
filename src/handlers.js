@@ -63,6 +63,17 @@ function parseDateArg(arg) {
 
 const MS_DAY = 86400000;
 
+async function deleteTaskReminders(taskId, client) {
+  const records = db.getActiveReminderMessages(taskId);
+  for (const rec of records) {
+    try {
+      const msg = await client.getMessageById(rec.message_id);
+      if (msg) await msg.delete(true);
+    } catch (_) {}
+  }
+  db.removeReminderMessagesForTask(taskId);
+}
+
 /**
  * Returns a warning string if logging `taskId` would violate a medication
  * spacing rule, or null if it's safe to proceed.
@@ -140,6 +151,7 @@ async function handleMessage(message, client) {
       if (Date.now() < pending.expiresAt) {
         db.logCompletion(pending.task.id, pending.triggeredBy, pending.when?.toISOString());
         await message.react('✅');
+        await deleteTaskReminders(pending.task.id, client);
         if (config.statusAfterCompletion) await sendStatus(message, client);
         console.log(`[handler] Confirmed duplicate "${pending.task.id}" by ${pending.triggeredBy}`);
       }
@@ -454,6 +466,7 @@ async function handleMessage(message, client) {
 
     db.logCompletion(task.id, userName, when ? when.toISOString() : undefined);
     await message.react('✅');
+    await deleteTaskReminders(task.id, client);
     if (config.statusAfterCompletion) await sendStatus(message, client);
     console.log(`[handler] ${userName} completed "${task.id}"${when ? ' at ' + when.toLocaleTimeString() : ''}`);
 
@@ -512,11 +525,12 @@ async function handleReaction(reaction, client) {
   db.logCompletion(task.id, userName);
   console.log(`[handler] ${userName} completed "${task.id}" via reaction`);
 
-  // Confirm with a ✅ react on the reminder, then post the updated status.
+  // Confirm with a ✅ react on the reminder, delete it, then post the updated status.
   try {
     const msg = await client.getMessageById(msgId);
     if (msg) {
       await msg.react('✅');
+      await deleteTaskReminders(task.id, client);
       if (config.statusAfterCompletion) await sendStatus(msg, client);
     }
   } catch (_) {}

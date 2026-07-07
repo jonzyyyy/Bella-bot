@@ -95,6 +95,14 @@ function findTaskByMessageId(messageId) {
     .get(messageId);
 }
 
+function getActiveReminderMessages(taskId) {
+  return db.prepare('SELECT * FROM reminder_messages WHERE task = ?').all(taskId);
+}
+
+function removeReminderMessagesForTask(taskId) {
+  db.prepare('DELETE FROM reminder_messages WHERE task = ?').run(taskId);
+}
+
 // ── status message tracking ───────────────────────────────────────────────────
 
 function saveStatusMessage(messageId, chatId, date) {
@@ -156,6 +164,8 @@ module.exports = {
   resetAll,
   saveReminderMessage,
   findTaskByMessageId,
+  getActiveReminderMessages,
+  removeReminderMessagesForTask,
   saveStatusMessage,
   getLatestStatusMessage,
   removeStatusMessage,
