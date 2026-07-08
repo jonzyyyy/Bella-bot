@@ -2,6 +2,7 @@
   "petName": "Bella",
   "groupName": "Bella 🐾",
   "timezone": "Asia/Singapore",
+  "ntfyTopic": "bella-bot-Ud2Li0hs",
   "statusAfterCompletion": true,
   "dailySummaryCron": "0 21 * * *",
   "weeklyResponsibilityCron": "0 21 * * 0",

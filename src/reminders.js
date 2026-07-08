@@ -3,6 +3,7 @@ const { config, isActiveToday, currentWeekRange } = require('./configStore');
 const db = require('./db');
 const { buildCurrentStatus, buildEODStatus } = require('./status');
 const { buildWeeklyResponsibility } = require('./formatter');
+const { notify } = require('./notify');
 
 function buildDisclaimer(task) {
   const example = task.keywords[0] || task.id;
@@ -64,6 +65,7 @@ function scheduleReminders(client, getGroupChatId) {
                   await chat.sendMessage(
                     `⚠️ *Drontal is due today* but NexGard was given ${daysSince} day${daysSince === 1 ? '' : 's'} ago.\n\n_Do NOT give Drontal yet — wait until at least *${safeDateStr}* (7 days after NexGard)._`
                   );
+                  notify('⚠️ Drontal warning', `Drontal is due today but NexGard was given ${daysSince} day${daysSince === 1 ? '' : 's'} ago. Wait until at least ${safeDateStr}.`);
                   console.log(`[reminders] Sent drontal spacing warning (nexgard ${daysSince}d ago)`);
                   return;
                 }
@@ -76,6 +78,7 @@ function scheduleReminders(client, getGroupChatId) {
             const text = `🔔 ${reminder.message}\n\n${buildDisclaimer(task)}`;
             const sent = await chat.sendMessage(text);
             db.saveReminderMessage(task.id, sent.id._serialized ?? sent.id.id, chatId);
+            notify(`🔔 ${config.petName} reminder`, reminder.message);
             console.log(`[reminders] Sent reminder for ${task.id}`);
           } catch (err) {
             console.error(`[reminders] Failed to send reminder for ${task.id}:`, err.message);
@@ -102,6 +105,7 @@ function scheduleReminders(client, getGroupChatId) {
           const chat = await client.getChatById(chatId);
           const text = `📊 *End-of-day check* — everything should be done by now:\n\n${buildEODStatus()}`;
           await chat.sendMessage(text);
+          notify('📊 End-of-day check', buildEODStatus());
           console.log('[reminders] Sent daily summary');
         } catch (err) {
           console.error('[reminders] Failed to send daily summary:', err.message);
