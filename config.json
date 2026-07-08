@@ -203,7 +203,7 @@
         "toothbrush"
       ],
       "schedule": {
-        "everyDays": 7,
+        "everyDays": 2,
         "anchor": "2026-06-30"
       },
       "reminders": [
