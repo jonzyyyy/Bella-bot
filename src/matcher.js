@@ -1,5 +1,14 @@
 const { config } = require('./configStore');
 
+// Messages that start with these words (or end with ?) are questions, not completions.
+const QUESTION_RE = /^\s*(what|which|when|where|why|how|should|can|could|would|will|is|are|was|were|use\s+which|use\s+what)\b|\?/i;
+
+/** True if `text` contains keyword `kw` as whole words. */
+function kwMatches(text, kw) {
+  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('\\b' + escaped + '\\b').test(text);
+}
+
 /** Parses "HH:MM" into minutes since midnight. */
 function toMinutes(hhmm) {
   const [h, m] = String(hhmm).split(':').map((n) => parseInt(n, 10));
@@ -26,12 +35,14 @@ function matchTask(text, now = new Date()) {
   if (!text) return null;
   const normalised = text.toLowerCase().trim();
 
+  // Bail out early on question-style messages.
+  if (QUESTION_RE.test(normalised)) return null;
+
   let candidates = [];
   for (const task of config.tasks) {
     let score = 0;
     for (const kw of task.keywords) {
-      // Substring match so partial sentences like "just fed her" still work.
-      if (normalised.includes(kw.toLowerCase())) score++;
+      if (kwMatches(normalised, kw.toLowerCase())) score++;
     }
     if (score > 0) candidates.push({ task, score });
   }
