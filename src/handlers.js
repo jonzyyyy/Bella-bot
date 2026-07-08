@@ -8,6 +8,7 @@ const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest
 const { buildHistoryMessage, buildRemindersMessage, buildWeeklyResponsibility, fmtTime } = require('./formatter');
 const { rescheduleReminders } = require('./reminders');
 const { buildCurrentStatus, buildHistoricalStatus, sendStatus } = require('./status');
+const { notify } = require('./notify');
 
 /**
  * Handles an incoming text message.
@@ -151,6 +152,7 @@ async function handleMessage(message, client) {
       if (Date.now() < pending.expiresAt) {
         db.logCompletion(pending.task.id, pending.triggeredBy, pending.when?.toISOString());
         await message.react('✅');
+        notify('✅ Task completed', `${pending.task.label} — by ${pending.triggeredBy} (confirmed)`);
         await deleteTaskReminders(pending.task.id, client);
         if (config.statusAfterCompletion) await sendStatus(message, client);
         console.log(`[handler] Confirmed duplicate "${pending.task.id}" by ${pending.triggeredBy}`);
@@ -466,6 +468,7 @@ async function handleMessage(message, client) {
 
     db.logCompletion(task.id, userName, when ? when.toISOString() : undefined);
     await message.react('✅');
+    notify('✅ Task completed', `${task.label} — by ${userName}${when ? ' at ' + fmtTime(when.toISOString()) : ''}`);
     await deleteTaskReminders(task.id, client);
     if (config.statusAfterCompletion) await sendStatus(message, client);
     console.log(`[handler] ${userName} completed "${task.id}"${when ? ' at ' + when.toLocaleTimeString() : ''}`);
@@ -523,6 +526,7 @@ async function handleReaction(reaction, client) {
   } catch (_) {}
 
   db.logCompletion(task.id, userName);
+  notify('✅ Task completed', `${task.label} — by ${userName} (👍 reaction)`);
   console.log(`[handler] ${userName} completed "${task.id}" via reaction`);
 
   // Confirm with a ✅ react on the reminder, delete it, then post the updated status.
