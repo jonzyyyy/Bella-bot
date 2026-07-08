@@ -1,13 +1,8 @@
 const { config } = require('./configStore');
 
-// Messages that start with these words (or end with ?) are questions, not completions.
-const QUESTION_RE = /^\s*(what|which|when|where|why|how|should|can|could|would|will|is|are|was|were|use\s+which|use\s+what)\b|\?/i;
-
-/** True if `text` contains keyword `kw` as whole words. */
-function kwMatches(text, kw) {
-  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp('\\b' + escaped + '\\b').test(text);
-}
+// Optional time expression at the end of a completion message,
+// e.g. "shat 10am", "fed her 7:30pm", "poop 230pm".
+const TRAILING_TIME_RE = /\s+(\d{1,2}:\d{2}\s*(?:am|pm)?|\d{3,4}\s*(?:am|pm)|\d{1,2}\s*(?:am|pm))\s*$/i;
 
 /** Parses "HH:MM" into minutes since midnight. */
 function toMinutes(hhmm) {
@@ -23,35 +18,35 @@ function windowCoversNow(task, now) {
 }
 
 /**
- * Returns the best-matching task for the message text, or null.
+ * Returns the matching task for the message text, or null.
  *
- * When several tasks share a keyword (e.g. "fed" matches both Breakfast and
- * Dinner), we disambiguate by:
- *   1. Number of matching keywords — an explicit word like "dinner" wins.
- *   2. Time-of-day window — a plain "fed" in the morning → Breakfast.
- *   3. First defined, as a last resort.
+ * The message must be EXACTLY a keyword, optionally followed by a time
+ * ("shat", "shat 10am", "fed her 7:30pm"). Anything else — extra words,
+ * questions, normal conversation — is ignored so casual chat never
+ * accidentally logs a task.
+ *
+ * When several tasks share the matched keyword (e.g. "poop" belongs to
+ * morning/evening/extra poop), we disambiguate by:
+ *   1. Time-of-day window — "poop" in the morning → Morning poop.
+ *   2. A windowless candidate (e.g. Extra poop) outside all windows.
+ *   3. Soonest upcoming window, as a last resort.
  */
 function matchTask(text, now = new Date()) {
   if (!text) return null;
-  const normalised = text.toLowerCase().trim();
-
-  // Bail out early on question-style messages.
-  if (QUESTION_RE.test(normalised)) return null;
+  const normalised = text
+    .toLowerCase()
+    .trim()
+    .replace(TRAILING_TIME_RE, '')
+    .trim();
 
   let candidates = [];
   for (const task of config.tasks) {
-    let score = 0;
-    for (const kw of task.keywords) {
-      if (kwMatches(normalised, kw.toLowerCase())) score++;
+    if (task.keywords.some((kw) => kw.toLowerCase() === normalised)) {
+      candidates.push({ task });
     }
-    if (score > 0) candidates.push({ task, score });
   }
 
   if (candidates.length === 0) return null;
-
-  // Keep only the highest-scoring candidates (explicit keywords win).
-  const maxScore = Math.max(...candidates.map((c) => c.score));
-  candidates = candidates.filter((c) => c.score === maxScore);
   if (candidates.length === 1) return candidates[0].task;
 
   // Tie-break by time-of-day window (uses `now`, which may be an explicit
