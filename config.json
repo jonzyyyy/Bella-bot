@@ -159,6 +159,7 @@
       "id": "poop_extra",
       "label": "Extra poop",
       "emoji": "💩",
+      "optional": true,
       "multiple": true,
       "keywords": [
         "shat",
