@@ -69,8 +69,15 @@ async function deleteTaskReminders(taskId, client) {
   for (const rec of records) {
     try {
       const msg = await client.getMessageById(rec.message_id);
-      if (msg) await msg.delete(true);
-    } catch (_) {}
+      if (msg) {
+        await msg.delete(true);
+        console.log(`[handler] Deleted reminder message for ${taskId}`);
+      } else {
+        console.warn(`[handler] Reminder message ${rec.message_id} not found (already gone?)`);
+      }
+    } catch (err) {
+      console.error(`[handler] Failed to delete reminder for ${taskId}:`, err.message);
+    }
   }
   db.removeReminderMessagesForTask(taskId);
 }
@@ -518,12 +525,22 @@ async function handleReaction(reaction, client) {
   const task = config.tasks.find((t) => t.id === record.task);
   if (!task) return;
 
-  // Resolve the reactor's name
+  // Resolve the reactor's name. getContactById throws "getAlternateUserWid"
+  // when the reaction comes from the bot's own linked account — same issue as
+  // in handleMessage — so fall back to the bot's name (or the raw number).
   let userName = 'Someone';
   try {
     const contact = await client.getContactById(reaction.senderId);
     userName = contact.pushname || contact.name || contact.number || 'Someone';
-  } catch (_) {}
+  } catch (err) {
+    const selfId = client.info?.wid?._serialized;
+    if (selfId && reaction.senderId === selfId) {
+      userName = client.info?.pushname || 'Me';
+    } else if (reaction.senderId) {
+      userName = String(reaction.senderId).split('@')[0];
+    }
+    console.warn('[handler] Could not resolve reactor contact:', err.message);
+  }
 
   db.logCompletion(task.id, userName);
   notify('✅ Task completed', `${task.label} — by ${userName} (👍 reaction)`);
