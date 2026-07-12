@@ -33,23 +33,24 @@ function buildStatusMessage(taskData, date = new Date()) {
 
   taskData.forEach(({ task, completions, daysOverdue = 0 }, i) => {
     const num = NUMBER_EMOJIS[i] ?? `${i + 1}.`;
+    const label = task.assignee?.name ? `${task.label} 👤${task.assignee.name}` : task.label;
     if (completions.length === 0) {
       const overdue = daysOverdue > 0
         ? ` _(${daysOverdue} day${daysOverdue === 1 ? '' : 's'} overdue)_`
         : '';
       const deferred = task.schedule?.deferralInfo ? ` _(${task.schedule.deferralInfo})_` : '';
       const icon = task.optional ? '✖' : '❌';
-      lines.push(`${num} ${task.label} ${icon}${overdue}${deferred}`);
+      lines.push(`${num} ${label} ${icon}${overdue}${deferred}`);
     } else if (task.multiple) {
       // Tasks that can happen several times a day (e.g. poop) — list them all.
       const all = completions
         .map((c) => `${fmtTime(c.timestamp)} by ${c.user_name}`)
         .join(', ');
-      lines.push(`${num} ${task.label} ✅ ×${completions.length} (${all})`);
+      lines.push(`${num} ${label} ✅ ×${completions.length} (${all})`);
     } else {
       const last = completions[completions.length - 1];
       lines.push(
-        `${num} ${task.label} ✅ (${fmtTime(last.timestamp)} by ${last.user_name})`
+        `${num} ${label} ✅ (${fmtTime(last.timestamp)} by ${last.user_name})`
       );
     }
   });

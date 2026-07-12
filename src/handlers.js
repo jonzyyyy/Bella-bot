@@ -1,7 +1,7 @@
 const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
   extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange, dayBoundsUTC,
-  nextDueDate, clearTaskDeferral,
+  nextDueDate, clearTaskDeferral, setTaskAssignee, clearTaskAssignee,
 } = require('./configStore');
 const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
@@ -16,7 +16,7 @@ const { notify } = require('./notify');
 // Markers that identify the bot's own output, so we never react to ourselves
 // and trigger an infinite loop (e.g. the status summary contains "Walked",
 // which would otherwise re-match the walk keyword).
-const BOT_MARKERS = ['🐾', '📋', '⏰', '🆕', '🗑️', '♻️', '🔔', '🗓️', '⚙️', '📊', '⚠️'];
+const BOT_MARKERS = ['🐾', '📋', '⏰', '🆕', '🗑️', '♻️', '🔔', '🗓️', '⚙️', '📊', '⚠️', '👥'];
 
 // Pending duplicate confirmations — keyed by chat ID, cleared after 5 min or on response.
 // { task, triggeredBy, when (Date|null), expiresAt (ms timestamp) }
@@ -215,6 +215,96 @@ async function handleMessage(message, client) {
   // ── list reminder times ────────────────────────────────────────────────────
   if (/^\s*reminders\s*$/i.test(body)) {
     await message.reply(buildRemindersMessage(cronToTime));
+    return;
+  }
+
+  // ── list group members (with numbers, for assigning) ───────────────────────
+  if (/^\s*members\s*$/i.test(body)) {
+    try {
+      const chat = await message.getChat();
+      if (!chat.isGroup) {
+        await message.reply('👥 This only works in the group chat.');
+        return;
+      }
+      const lines = ['👥 *Group members*'];
+      for (const p of chat.participants) {
+        const id = p.id?._serialized;
+        let name = id?.split('@')[0] || '?';
+        try {
+          const c = await client.getContactById(id);
+          name = c.pushname || c.name || c.number || name;
+        } catch (_) {}
+        lines.push(`• ${name} — \`${id?.split('@')[0]}\``);
+      }
+      lines.push('');
+      lines.push('_Assign with_ `assign <task> <number>` _e.g._ `assign feed_pm 6591234567`');
+      await message.reply(lines.join('\n'));
+    } catch (err) {
+      await message.reply(`👥 Couldn't read the member list: ${err.message}`);
+    }
+    return;
+  }
+
+  // ── assign a person to a task ──────────────────────────────────────────────
+  //   "assign feed_pm 6591234567"  or  "assign feed_pm @mention"
+  const assignMatch = body.match(/^\s*assign\s+(\w+)\s+(.+)$/i);
+  if (assignMatch) {
+    const taskId = assignMatch[1];
+    if (!getTask(taskId)) {
+      await message.reply(`👥 Unknown task "${taskId}". Send \`reminders\` to see task ids.`);
+      return;
+    }
+    // Prefer an @mention if the message carries one, else parse a raw number.
+    let wid = null;
+    const mentioned = await message.getMentions().catch(() => []);
+    if (mentioned && mentioned.length > 0) {
+      wid = mentioned[0].id?._serialized;
+    } else {
+      const digits = assignMatch[2].replace(/\D/g, '');
+      if (digits) wid = `${digits}@c.us`;
+    }
+    if (!wid) {
+      await message.reply('👥 Give a phone number or @mention. E.g. `assign feed_pm 6591234567`');
+      return;
+    }
+    let name = wid.split('@')[0];
+    try {
+      const contact = await client.getContactById(wid);
+      name = contact.pushname || contact.name || contact.number || name;
+    } catch (_) {}
+    const result = setTaskAssignee(taskId, { id: wid, name });
+    if (!result.ok) {
+      await message.reply(`👥 ${result.error}`);
+      return;
+    }
+    await message.reply(`👥 *${result.task.label}* is now assigned to *${name}* — they'll be @mentioned on its reminders.`);
+    console.log(`[handler] Assigned "${taskId}" → ${name} (${wid})`);
+    return;
+  }
+
+  // ── unassign a task ────────────────────────────────────────────────────────
+  const unassignMatch = body.match(/^\s*unassign\s+(\w+)\s*$/i);
+  if (unassignMatch) {
+    const result = clearTaskAssignee(unassignMatch[1]);
+    if (!result.ok) {
+      await message.reply(`👥 ${result.error}`);
+      return;
+    }
+    await message.reply(`👥 *${result.task.label}* is no longer assigned to anyone.`);
+    console.log(`[handler] Unassigned "${unassignMatch[1]}"`);
+    return;
+  }
+
+  // ── list current assignments ───────────────────────────────────────────────
+  if (/^\s*assignments\s*$/i.test(body)) {
+    const assigned = config.tasks.filter((t) => t.assignee?.name);
+    if (assigned.length === 0) {
+      await message.reply('👥 No tasks are assigned yet. Use `members` then `assign <task> <number>`.');
+      return;
+    }
+    const lines = ['👥 *Task assignments*'];
+    for (const t of assigned) lines.push(`• ${t.label} → *${t.assignee.name}*`);
+    await message.reply(lines.join('\n'));
     return;
   }
 

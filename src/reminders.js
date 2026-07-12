@@ -75,10 +75,21 @@ function scheduleReminders(client, getGroupChatId) {
             // Prefix with 🔔 so the bot recognises (and ignores) its own
             // reminders — the disclaimer text contains "fed her" as an example,
             // which would otherwise be read as a feed completion.
-            const text = `🔔 ${reminder.message}\n\n${buildDisclaimer(task)}`;
-            const sent = await chat.sendMessage(text);
+            // If the task has an assignee, @mention them so their phone pings.
+            let body = `🔔 ${reminder.message}`;
+            const sendOpts = {};
+            if (task.assignee?.id) {
+              const num = task.assignee.id.split('@')[0];
+              body += `\n\n@${num}, you're on this one 🙌`;
+              sendOpts.mentions = [task.assignee.id];
+            }
+            const text = `${body}\n\n${buildDisclaimer(task)}`;
+            const sent = await chat.sendMessage(text, sendOpts);
             db.saveReminderMessage(task.id, sent.id._serialized ?? sent.id.id, chatId);
-            notify(`🔔 ${config.petName} reminder`, reminder.message);
+            notify(
+              `🔔 ${config.petName} reminder`,
+              task.assignee?.name ? `${reminder.message} (${task.assignee.name}'s turn)` : reminder.message
+            );
             console.log(`[reminders] Sent reminder for ${task.id}`);
           } catch (err) {
             console.error(`[reminders] Failed to send reminder for ${task.id}:`, err.message);

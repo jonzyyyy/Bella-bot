@@ -210,6 +210,29 @@ function getTask(taskId) {
 }
 
 /**
+ * Assigns a person to a task. The assignee is stored as { id, name } so
+ * reminders can @mention the id and the status list can show the name.
+ * @param {string} taskId
+ * @param {{ id: string, name: string }} assignee  WhatsApp id + display name
+ * @returns {{ ok: true, task } | { ok: false, error: string }}
+ */
+function setTaskAssignee(taskId, assignee) {
+  const task = getTask(taskId);
+  if (!task) return { ok: false, error: `Unknown task "${taskId}".` };
+  task.assignee = { id: assignee.id, name: assignee.name };
+  save();
+  return { ok: true, task };
+}
+
+function clearTaskAssignee(taskId) {
+  const task = getTask(taskId);
+  if (!task) return { ok: false, error: `Unknown task "${taskId}".` };
+  delete task.assignee;
+  save();
+  return { ok: true, task };
+}
+
+/**
  * Replaces a task's reminder times with the supplied list of times.
  * Existing reminder messages are preserved by position; new slots get a
  * sensible default message.
@@ -442,6 +465,8 @@ module.exports = {
   getTask,
   setTaskTimes,
   setTaskSchedule,
+  setTaskAssignee,
+  clearTaskAssignee,
   addTask,
   removeTask,
 };
