@@ -141,6 +141,8 @@ function clearTaskDeferral(taskId) {
  *   schedule.daysOfWeek  — array of 0(Sun)–6(Sat)
  *   schedule.daysOfMonth — array of 1–31
  *   schedule.everyMonths / everyDays (+ optional anchor) — interval recurrence
+ *   schedule.from / until — YYYY-MM-DD bounds (inclusive) limiting when the
+ *     task runs at all, e.g. a daily course for one week.
  * No schedule → active every day. Interval tasks stay active (overdue) from
  * their due date until logged, then advance to the next cycle automatically.
  * Days are evaluated in the configured timezone so they match reminders.
@@ -149,6 +151,10 @@ function isActiveToday(task, date = new Date()) {
   const s = task.schedule;
   if (!s) return true;
   const local = new Date(date.toLocaleString('en-US', { timeZone: config.timezone }));
+
+  // Date-range bounds apply to every schedule type.
+  if (s.from && dayNum(local) < dayNum(new Date(s.from + 'T00:00:00'))) return false;
+  if (s.until && dayNum(local) > dayNum(new Date(s.until + 'T00:00:00'))) return false;
 
   if (s.everyMonths || s.everyDays) {
     const due = nextDueDate(task);
@@ -178,7 +184,12 @@ function describeSchedule(task) {
   const parts = [];
   if (Array.isArray(s.daysOfWeek)) parts.push(s.daysOfWeek.map((d) => DOW[d]).join(' & '));
   if (Array.isArray(s.daysOfMonth)) parts.push('day ' + s.daysOfMonth.join(', ') + ' of month');
-  return parts.join('; ') || 'daily';
+  let desc = parts.join('; ') || 'daily';
+  if (s.until) {
+    const untilStr = new Date(s.until + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    desc += ` until ${untilStr}`;
+  }
+  return desc;
 }
 
 /** Converts a "M H * * *" cron back into a friendly "8:30am" string. */

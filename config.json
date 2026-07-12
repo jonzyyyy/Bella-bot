@@ -122,6 +122,30 @@
       ]
     },
     {
+      "id": "antifungal",
+      "label": "Antifungal spray on feet",
+      "emoji": "🦶",
+      "keywords": [
+        "antifungal",
+        "antifungal spray",
+        "spray feet",
+        "sprayed feet",
+        "feet spray",
+        "sprayed her feet",
+        "feet"
+      ],
+      "schedule": {
+        "from": "2026-07-12",
+        "until": "2026-07-18"
+      },
+      "reminders": [
+        {
+          "cron": "0 20 * * *",
+          "message": "Spray Bella's feet with antifungal 🦶"
+        }
+      ]
+    },
+    {
       "id": "poop_am",
       "label": "Morning poop",
       "emoji": "💩",
