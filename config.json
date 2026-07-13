@@ -122,8 +122,8 @@
       ]
     },
     {
-      "id": "antifungal",
-      "label": "Antifungal spray on feet",
+      "id": "antifungal_am",
+      "label": "Antifungal spray (AM)",
       "emoji": "🦶",
       "keywords": [
         "antifungal",
@@ -134,6 +134,38 @@
         "sprayed her feet",
         "feet"
       ],
+      "window": {
+        "from": "00:00",
+        "to": "14:00"
+      },
+      "schedule": {
+        "from": "2026-07-12",
+        "until": "2026-07-18"
+      },
+      "reminders": [
+        {
+          "cron": "0 9 * * *",
+          "message": "Spray Bella's feet with antifungal (morning) 🦶"
+        }
+      ]
+    },
+    {
+      "id": "antifungal_pm",
+      "label": "Antifungal spray (PM)",
+      "emoji": "🦶",
+      "keywords": [
+        "antifungal",
+        "antifungal spray",
+        "spray feet",
+        "sprayed feet",
+        "feet spray",
+        "sprayed her feet",
+        "feet"
+      ],
+      "window": {
+        "from": "14:00",
+        "to": "23:59"
+      },
       "schedule": {
         "from": "2026-07-12",
         "until": "2026-07-18"
@@ -141,7 +173,7 @@
       "reminders": [
         {
           "cron": "0 20 * * *",
-          "message": "Spray Bella's feet with antifungal 🦶"
+          "message": "Spray Bella's feet with antifungal (evening) 🦶"
         }
       ]
     },
