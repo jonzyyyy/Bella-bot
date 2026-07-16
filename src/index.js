@@ -8,10 +8,19 @@ const { scheduleReminders } = require('./reminders');
 const groupName = process.env.WHATSAPP_GROUP_NAME || config.groupName;
 const authPath  = process.env.BELLA_AUTH || '.wwebjs_auth';
 
+// WhatsApp Web auto-updates its web build; new builds periodically break the
+// installed whatsapp-web.js (getChats() throws a cryptic "r: r"), which leaves
+// the bot connected but unable to find the group — so it silently ignores every
+// message. Pin to a known-good build (cached under .wwebjs_cache) to stay stable.
+// Override with WWEB_VERSION if a future update forces a bump.
+const pinnedWebVersion = process.env.WWEB_VERSION || '2.3000.1043040688';
+
 // ── WhatsApp client ────────────────────────────────────────────────────────────
 
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: authPath }),
+  webVersion: pinnedWebVersion,
+  webVersionCache: { type: 'local', path: process.env.BELLA_WWEB_CACHE || '.wwebjs_cache' },
   puppeteer: {
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
@@ -29,17 +38,26 @@ const client = new Client({
 
 let groupChatId = null;
 
-async function resolveGroupChatId() {
-  const chats = await client.getChats();
-  const group = chats.find(
-    (c) => c.isGroup && c.name.toLowerCase() === groupName.toLowerCase()
-  );
-  if (group) {
-    groupChatId = group.id._serialized ?? group.id._serialised;
-    console.log(`[bot] Found group: "${group.name}" (${groupChatId})`);
-  } else {
-    console.warn(`[bot] Group "${groupName}" not found. Bot will work in DMs only until the group is visible.`);
+async function resolveGroupChatId(retries = 5) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const chats = await client.getChats();
+      const group = chats.find(
+        (c) => c.isGroup && c.name.toLowerCase() === groupName.toLowerCase()
+      );
+      if (group) {
+        groupChatId = group.id._serialized ?? group.id._serialised;
+        console.log(`[bot] Found group: "${group.name}" (${groupChatId})`);
+      } else {
+        console.warn(`[bot] Group "${groupName}" not found. Bot will work in DMs only until the group is visible.`);
+      }
+      return;
+    } catch (err) {
+      console.error(`[bot] getChats failed (attempt ${attempt}/${retries}): ${err.message}`);
+      if (attempt < retries) await new Promise((r) => setTimeout(r, 10000));
+    }
   }
+  console.error('[bot] Could not resolve group chat after retries — messages will be ignored until the next restart.');
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
