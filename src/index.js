@@ -13,14 +13,17 @@ const authPath  = process.env.BELLA_AUTH || '.wwebjs_auth';
 // the bot connected but unable to find the group — so it silently ignores every
 // message. Pin to a known-good build (cached under .wwebjs_cache) to stay stable.
 // Override with WWEB_VERSION if a future update forces a bump.
-const pinnedWebVersion = process.env.WWEB_VERSION || '2.3000.1043040688';
+const pinnedWebVersion = process.env.WWEB_VERSION || '2.3000.1043041454-alpha';
 
 // ── WhatsApp client ────────────────────────────────────────────────────────────
 
 const client = new Client({
   authStrategy: new LocalAuth({ dataPath: authPath }),
   webVersion: pinnedWebVersion,
-  webVersionCache: { type: 'local', path: process.env.BELLA_WWEB_CACHE || '.wwebjs_cache' },
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
+  },
   puppeteer: {
     headless: true,
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
