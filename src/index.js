@@ -1,4 +1,6 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { config } = require('./configStore');
@@ -109,5 +111,24 @@ client.on('disconnected', (reason) => {
 
 // ── Start ──────────────────────────────────────────────────────────────────────
 
+// WhatsApp Web's service worker caches the app shell and, on this RPi, keeps
+// getting into a state where getChats() throws "r" — leaving the bot connected
+// but unable to find the group. Clearing only the app cache (NOT IndexedDB /
+// Local Storage, which hold the login) on every startup forces a clean load and
+// keeps the session logged in. Disable with BELLA_KEEP_CACHE=1 if ever needed.
+function clearWebAppCache() {
+  if (process.env.BELLA_KEEP_CACHE === '1') return;
+  const base = path.join(authPath, 'session', 'Default');
+  for (const dir of ['Service Worker', 'Cache', 'Code Cache', 'GPUCache']) {
+    try {
+      fs.rmSync(path.join(base, dir), { recursive: true, force: true });
+    } catch (err) {
+      console.warn(`[bot] Could not clear cache "${dir}": ${err.message}`);
+    }
+  }
+  console.log('[bot] Cleared WhatsApp Web app cache (login preserved).');
+}
+
 console.log('[bot] Initialising…');
+clearWebAppCache();
 client.initialize();
