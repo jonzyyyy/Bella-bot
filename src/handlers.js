@@ -1,7 +1,7 @@
 const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
   extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange, dayBoundsUTC,
-  nextDueDate, clearTaskDeferral, setTaskAssignee, clearTaskAssignee,
+  nextDueDate, clearTaskDeferral, setTaskAssignee, clearTaskAssignee, localDateTimeToUTC,
 } = require('./configStore');
 const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
@@ -63,6 +63,36 @@ function parseDateArg(arg) {
 }
 
 const MS_DAY = 86400000;
+
+/**
+ * Pulls a date token ("yesterday", "16 jul", "jul 16") out of a completion
+ * message so tasks can be backdated. Returns the resolved "YYYY-MM-DD" (local)
+ * and the message with the date token removed (so keyword matching still works).
+ */
+function extractDateFromText(body) {
+  const text = String(body).trim();
+
+  const yRe = /\byesterday\b/i;
+  if (yRe.test(text)) {
+    return { dateStr: parseDateArg('yesterday'), cleaned: text.replace(yRe, ' ').replace(/\s+/g, ' ').trim() };
+  }
+
+  // "<day> <month>" or "<month> <day>", e.g. "16 jul" / "jul 16".
+  const dm = text.match(/\b(\d{1,2})\s+([a-z]{3,9})\b/i);
+  const md = text.match(/\b([a-z]{3,9})\s+(\d{1,2})\b/i);
+  const hit = dm || md;
+  if (hit) {
+    const monthWord = (dm ? hit[2] : hit[1]).toLowerCase();
+    if (MONTH_MAP[monthWord] !== undefined) {
+      const dateStr = parseDateArg(hit[0].toLowerCase());
+      if (dateStr) {
+        return { dateStr, cleaned: text.replace(hit[0], ' ').replace(/\s+/g, ' ').trim() };
+      }
+    }
+  }
+
+  return { dateStr: null, cleaned: text };
+}
 
 async function deleteTaskReminders(taskId, client) {
   const records = db.getActiveReminderMessages(taskId);
@@ -517,15 +547,28 @@ async function handleMessage(message, client) {
   }
 
   // ── task completion keyword ────────────────────────────────────────────────
-  // An explicit time in the message ("shat 8:30am", "fed her 7pm") sets both
-  // the routing window and the logged timestamp; otherwise we use now.
-  const when = extractTimeFromText(body);
-  let task = matchTask(body, when || new Date());
+  // A date token ("yesterday", "16 jul") backdates the log; an explicit time
+  // ("shat 8:30am") sets the routing window and logged time. Both are optional.
+  const { dateStr, cleaned } = extractDateFromText(body);
+  const timeWhen = extractTimeFromText(cleaned);
+  let when;
+  if (dateStr) {
+    when = localDateTimeToUTC(dateStr, timeWhen ? timeWhen.getHours() : 12, timeWhen ? timeWhen.getMinutes() : 0);
+  } else {
+    when = timeWhen; // may be null → now
+  }
+  let task = matchTask(cleaned, when || new Date());
 
-  // If a windowed poop slot is already logged today, overflow to poop_extra.
+  // If a windowed poop slot is already logged that day, overflow to poop_extra.
   if (task && (task.id === 'poop_am' || task.id === 'poop_pm')) {
-    const alreadyDone = db.getCompletionsToday(task.id);
-    if (alreadyDone.length > 0) {
+    let dayDone;
+    if (dateStr) {
+      const { start, end } = dayBoundsUTC(dateStr);
+      dayDone = db.getCompletionsBetween(task.id, start, end);
+    } else {
+      dayDone = db.getCompletionsToday(task.id);
+    }
+    if (dayDone.length > 0) {
       const extra = config.tasks.find((t) => t.id === 'poop_extra');
       if (extra) task = extra;
     }
@@ -546,7 +589,8 @@ async function handleMessage(message, client) {
     }
 
     // For tasks that don't allow multiple completions, check for a recent duplicate.
-    if (!task.multiple) {
+    // Skipped when backdating — "recent" is measured from now, not the past date.
+    if (!task.multiple && !dateStr) {
       const recent = db.getLastCompletionWithinMinutes(task.id, 30);
       if (recent) {
         const minsAgo = Math.max(1, Math.round((Date.now() - new Date(recent.timestamp).getTime()) / 60000));
@@ -565,6 +609,18 @@ async function handleMessage(message, client) {
 
     db.logCompletion(task.id, userName, when ? when.toISOString() : undefined);
     await message.react('✅');
+
+    // Backdated log — confirm with that day's updated status; don't touch today's
+    // reminders or status, and skip the med auto-defer (only relevant live).
+    if (dateStr) {
+      const pretty = new Date(when).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: config.timezone });
+      notify('✅ Task backdated', `${task.label} — ${pretty} by ${userName}`);
+      const { start, end } = dayBoundsUTC(dateStr);
+      await message.reply(`📋 Logged *${task.label}* for *${pretty}*.\n\n${buildHistoricalStatus(dateStr, start, end)}`);
+      console.log(`[handler] ${userName} backdated "${task.id}" to ${dateStr}`);
+      return;
+    }
+
     notify('✅ Task completed', `${task.label} — by ${userName}${when ? ' at ' + fmtTime(when.toISOString()) : ''}`);
     await deleteTaskReminders(task.id, client);
     if (config.statusAfterCompletion) await sendStatus(message, client);

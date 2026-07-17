@@ -396,6 +396,22 @@ function setTaskSchedule(taskId, tokens) {
  * Returns UTC ISO timestamps covering a full local-timezone day for a given
  * "YYYY-MM-DD" date string (interpreted in the configured timezone).
  */
+/**
+ * Converts a local calendar date + time (in the configured timezone) into a
+ * Date (UTC under the hood). Used to backdate completions, e.g. "fed yesterday".
+ * @param {string} dateStr  "YYYY-MM-DD" in the configured timezone
+ * @param {number} hour     0–23 local
+ * @param {number} min      0–59 local
+ */
+function localDateTimeToUTC(dateStr, hour = 12, min = 0) {
+  const now = new Date();
+  const local = new Date(now.toLocaleString('en-US', { timeZone: config.timezone }));
+  const fakeOffset = local.getTime() - now.getTime();
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const fake = new Date(y, m - 1, d, hour, min, 0, 0);
+  return new Date(fake.getTime() - fakeOffset);
+}
+
 function dayBoundsUTC(dateStr) {
   const now = new Date();
   const local = new Date(now.toLocaleString('en-US', { timeZone: config.timezone }));
@@ -461,6 +477,7 @@ module.exports = {
   nextDueDate,
   clearTaskDeferral,
   dayBoundsUTC,
+  localDateTimeToUTC,
   currentWeekRange,
   getTask,
   setTaskTimes,
