@@ -42,7 +42,11 @@ const client = new Client({
 // ── Group chat resolution ─────────────────────────────────────────────────────
 
 let groupChatId = null;
+let readyWatchdog = null;
 
+// Returns true if getChats() succeeded (group found or legitimately absent),
+// false if every attempt errored — the caller uses that to decide whether to
+// let the watchdog restart the process.
 async function resolveGroupChatId(retries = 5) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
@@ -56,26 +60,33 @@ async function resolveGroupChatId(retries = 5) {
       } else {
         console.warn(`[bot] Group "${groupName}" not found. Bot will work in DMs only until the group is visible.`);
       }
-      return;
+      return true;
     } catch (err) {
       console.error(`[bot] getChats failed (attempt ${attempt}/${retries}): ${err.message}`);
       if (attempt < retries) await new Promise((r) => setTimeout(r, 10000));
     }
   }
-  console.error('[bot] Could not resolve group chat after retries — messages will be ignored until the next restart.');
+  console.error('[bot] Could not resolve group chat after retries.');
+  return false;
 }
 
 // ── Event handlers ────────────────────────────────────────────────────────────
 
 client.on('qr', (qr) => {
+  // A QR means login is needed — that requires a human to scan, so stand the
+  // watchdog down instead of restart-looping.
+  if (readyWatchdog) { clearTimeout(readyWatchdog); readyWatchdog = null; }
   console.log('\n[bot] Scan the QR code below with WhatsApp:\n');
   qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', async () => {
   console.log('[bot] Client is ready!');
-  await resolveGroupChatId();
+  const ok = await resolveGroupChatId();
   scheduleReminders(client, () => groupChatId);
+  // Only stand down the watchdog if WhatsApp actually responded; if getChats
+  // errored the whole way, let the watchdog restart us for a clean retry.
+  if (ok && readyWatchdog) { clearTimeout(readyWatchdog); readyWatchdog = null; }
 });
 
 // We listen to `message_create` (not `message`) so the bot also reacts to
@@ -131,4 +142,15 @@ function clearWebAppCache() {
 
 console.log('[bot] Initialising…');
 clearWebAppCache();
+
+// Self-heal: if the WhatsApp client never becomes usable (cold-load hang or
+// getChats failing all retries), exit so PM2 restarts us with a fresh cache.
+// PM2 keeps a hung-but-"online" process forever otherwise. Stood down once the
+// client is ready (see the 'ready'/'qr' handlers).
+const readyTimeoutMs = Number(process.env.BELLA_READY_TIMEOUT_MS) || 210000; // 3.5 min
+readyWatchdog = setTimeout(() => {
+  console.error(`[bot] Watchdog: not ready after ${Math.round(readyTimeoutMs / 1000)}s — exiting for a clean restart.`);
+  process.exit(1);
+}, readyTimeoutMs);
+
 client.initialize();
