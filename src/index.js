@@ -6,6 +6,7 @@ const qrcode = require('qrcode-terminal');
 const { config } = require('./configStore');
 const { handleMessage, handleReaction } = require('./handlers');
 const { scheduleReminders } = require('./reminders');
+const { notify } = require('./notify');
 
 const groupName = process.env.WHATSAPP_GROUP_NAME || config.groupName;
 const authPath  = process.env.BELLA_AUTH || '.wwebjs_auth';
@@ -87,6 +88,7 @@ client.on('ready', async () => {
   // Only stand down the watchdog if WhatsApp actually responded; if getChats
   // errored the whole way, let the watchdog restart us for a clean retry.
   if (ok && readyWatchdog) { clearTimeout(readyWatchdog); readyWatchdog = null; }
+  if (ok) startHealthWatchdog();
 });
 
 // We listen to `message_create` (not `message`) so the bot also reacts to
@@ -117,8 +119,51 @@ client.on('auth_failure', (msg) => {
 });
 
 client.on('disconnected', (reason) => {
-  console.warn('[bot] Disconnected:', reason);
+  // whatsapp-web.js does not reconnect on its own after this event — the only
+  // reliable recovery is a clean process restart via PM2.
+  console.error('[bot] Disconnected:', reason, '— exiting for a clean restart.');
+  notify('⚠️ Bella Bot restarting', `WhatsApp disconnected (${reason}). Restarting automatically.`);
+  setTimeout(() => process.exit(1), 2000); // give the ntfy push a moment to send
 });
+
+// ── Runtime health watchdog ───────────────────────────────────────────────────
+// The session can die long after startup (e.g. WhatsApp Web navigates and
+// re-injection fails, leaving every call to time out) while PM2 still sees the
+// process as "online". Ping the client regularly; after several consecutive
+// failures, exit so PM2 restarts us through the self-healing boot path.
+
+const HEALTH_INTERVAL_MS = Number(process.env.BELLA_HEALTH_INTERVAL_MS) || 120000;
+const HEALTH_CHECK_TIMEOUT_MS = 30000;
+const HEALTH_FAILS_TO_EXIT = 3;
+let healthTimer = null;
+let healthFails = 0;
+
+function startHealthWatchdog() {
+  if (healthTimer) clearInterval(healthTimer);
+  healthFails = 0;
+  healthTimer = setInterval(async () => {
+    try {
+      const state = await Promise.race([
+        client.getState(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('health check timed out')), HEALTH_CHECK_TIMEOUT_MS)
+        ),
+      ]);
+      if (state !== 'CONNECTED') throw new Error(`state is ${state}`);
+      if (healthFails > 0) console.log('[bot] Health check recovered.');
+      healthFails = 0;
+    } catch (err) {
+      healthFails += 1;
+      console.error(`[bot] Health check failed (${healthFails}/${HEALTH_FAILS_TO_EXIT}): ${err.message}`);
+      if (healthFails >= HEALTH_FAILS_TO_EXIT) {
+        console.error('[bot] Watchdog: client unresponsive — exiting for a clean restart.');
+        notify('⚠️ Bella Bot restarting', 'WhatsApp session became unresponsive. Restarting automatically — back in a few minutes.');
+        setTimeout(() => process.exit(1), 2000);
+      }
+    }
+  }, HEALTH_INTERVAL_MS);
+  console.log(`[bot] Health watchdog running (every ${Math.round(HEALTH_INTERVAL_MS / 1000)}s).`);
+}
 
 // ── Start ──────────────────────────────────────────────────────────────────────
 
