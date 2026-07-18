@@ -1,4 +1,4 @@
-const { config, describeSchedule } = require('./configStore');
+const { config, describeSchedule, activeIgnore } = require('./configStore');
 
 const NUMBER_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
 
@@ -35,6 +35,14 @@ function buildStatusMessage(taskData, date = new Date()) {
     const num = NUMBER_EMOJIS[i] ?? `${i + 1}.`;
     const label = task.assignee?.name ? `${task.label} 👤${task.assignee.name}` : task.label;
     if (completions.length === 0) {
+      // An active ignore ({ reason, until }) softens the ❌ to a neutral ✖ and
+      // explains why the task is deliberately being skipped right now.
+      const ig = activeIgnore(task);
+      if (ig) {
+        const untilStr = new Date(ig.until + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        lines.push(`${num} ${label} ✖ _(skip — ${ig.reason}, until ${untilStr})_`);
+        return;
+      }
       const overdue = daysOverdue > 0
         ? ` _(${daysOverdue} day${daysOverdue === 1 ? '' : 's'} overdue)_`
         : '';

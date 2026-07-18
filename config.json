@@ -142,7 +142,11 @@
       },
       "schedule": {
         "from": "2026-07-12",
-        "until": "2026-07-18"
+        "until": "2026-07-23"
+      },
+      "ignore": {
+        "reason": "vet visit",
+        "until": "2026-07-21"
       },
       "reminders": [
         {
@@ -172,7 +176,11 @@
       },
       "schedule": {
         "from": "2026-07-12",
-        "until": "2026-07-18"
+        "until": "2026-07-23"
+      },
+      "ignore": {
+        "reason": "vet visit",
+        "until": "2026-07-21"
       },
       "reminders": [
         {
@@ -239,6 +247,7 @@
         "cleaned ears",
         "ear clean",
         "ears done",
+        "ears cleaned",
         "cleaned her ears"
       ],
       "reminders": [
@@ -250,6 +259,10 @@
       "schedule": {
         "everyDays": 3,
         "anchor": "2026-06-30"
+      },
+      "ignore": {
+        "reason": "vet visit",
+        "until": "2026-07-21"
       }
     },
     {
@@ -385,6 +398,31 @@
         {
           "cron": "0 9 * * *",
           "message": "Bella's annual vaccination is due 💉"
+        }
+      ]
+    },
+    {
+      "id": "vet",
+      "label": "Vet appointment (3pm)",
+      "emoji": "🏥",
+      "keywords": [
+        "vet",
+        "vet visit",
+        "vet appointment",
+        "vet done"
+      ],
+      "schedule": {
+        "from": "2026-07-21",
+        "until": "2026-07-21"
+      },
+      "reminders": [
+        {
+          "cron": "0 9 * * *",
+          "message": "Bella's vet appointment is today at 3pm 🏥"
+        },
+        {
+          "cron": "0 14 * * *",
+          "message": "Bella's vet appointment is in 1 hour (3pm) 🏥"
         }
       ]
     }

@@ -2,6 +2,7 @@ const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
   extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange, dayBoundsUTC,
   nextDueDate, clearTaskDeferral, setTaskAssignee, clearTaskAssignee, localDateTimeToUTC,
+  setTaskIgnore, clearTaskIgnore,
 } = require('./configStore');
 const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
@@ -16,7 +17,7 @@ const { notify } = require('./notify');
 // Markers that identify the bot's own output, so we never react to ourselves
 // and trigger an infinite loop (e.g. the status summary contains "Walked",
 // which would otherwise re-match the walk keyword).
-const BOT_MARKERS = ['🐾', '📋', '⏰', '🆕', '🗑️', '♻️', '🔔', '🗓️', '⚙️', '📊', '⚠️', '👥'];
+const BOT_MARKERS = ['🐾', '📋', '⏰', '🆕', '🗑️', '♻️', '🔔', '🗓️', '⚙️', '📊', '⚠️', '👥', '🚫'];
 
 // Pending duplicate confirmations — keyed by chat ID, cleared after 5 min or on response.
 // { task, triggeredBy, when (Date|null), expiresAt (ms timestamp) }
@@ -63,6 +64,35 @@ function parseDateArg(arg) {
 }
 
 const MS_DAY = 86400000;
+
+/**
+ * Parses a FUTURE date ("21 jul", "jul 21", "tomorrow") into "YYYY-MM-DD" in
+ * the configured timezone. Mirrors parseDateArg but biases forward: a
+ * day/month already past this year rolls into next year.
+ */
+function parseFutureDateArg(arg) {
+  const s = arg.trim().toLowerCase();
+  const tz = config.timezone;
+  const nowLocal = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+  const [ny, nm, nd] = nowLocal.split('-').map(Number);
+
+  if (s === 'today') return nowLocal;
+  if (s === 'tomorrow') return new Date(ny, nm - 1, nd + 1).toLocaleDateString('en-CA');
+
+  const m1 = s.match(/^(\d{1,2})\s+([a-z]+)$/);
+  const m2 = s.match(/^([a-z]+)\s+(\d{1,2})$/);
+  const hit = m1 || m2;
+  if (hit) {
+    const day = parseInt(m1 ? hit[1] : hit[2], 10);
+    const mon = MONTH_MAP[m1 ? hit[2] : hit[1]];
+    if (mon === undefined || day < 1 || day > 31) return null;
+    let year = ny;
+    if (new Date(year, mon, day) < new Date(ny, nm - 1, nd)) year += 1;
+    return new Date(year, mon, day).toLocaleDateString('en-CA');
+  }
+
+  return null;
+}
 
 /**
  * Pulls a date token ("yesterday", "16 jul", "jul 16") out of a completion
@@ -322,6 +352,44 @@ async function handleMessage(message, client) {
     }
     await message.reply(`👥 *${result.task.label}* is no longer assigned to anyone.`);
     console.log(`[handler] Unassigned "${unassignMatch[1]}"`);
+    return;
+  }
+
+  // ── temporarily skip a task ────────────────────────────────────────────────
+  //   "ignore ears until 21 jul vet visit"  → ✖ + note until end of 21 Jul
+  //   "ignore ears 21 jul vet visit"        → same ("until" optional)
+  //   "unignore ears"                       → back to normal immediately
+  const ignoreMatch = body.match(/^\s*ignore\s+(\w+)\s+(.+)$/i);
+  if (ignoreMatch) {
+    const taskId = ignoreMatch[1];
+    const rest = ignoreMatch[2].trim().replace(/^until\s+/i, '');
+    const dm = rest.match(/^(today|tomorrow|\d{1,2}\s+[a-z]{3,9}|[a-z]{3,9}\s+\d{1,2})\s*(.*)$/i);
+    const dateStr = dm ? parseFutureDateArg(dm[1]) : null;
+    if (!dateStr) {
+      await message.reply('🚫 Usage: `ignore <task> until <date> <reason>`\nExample: `ignore ears until 21 jul vet visit`');
+      return;
+    }
+    const reason = (dm[2] || '').trim() || 'paused';
+    const result = setTaskIgnore(taskId, dateStr, reason);
+    if (!result.ok) {
+      await message.reply(`🚫 ${result.error}`);
+      return;
+    }
+    const pretty = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    await message.reply(`🚫 *${result.task.label}* will be skipped until end of *${pretty}* — ${reason}.\nNo reminders will be sent for it; it shows as ✖ in status.`);
+    console.log(`[handler] Ignoring "${taskId}" until ${dateStr} (${reason})`);
+    return;
+  }
+
+  const unignoreMatch = body.match(/^\s*unignore\s+(\w+)\s*$/i);
+  if (unignoreMatch) {
+    const result = clearTaskIgnore(unignoreMatch[1]);
+    if (!result.ok) {
+      await message.reply(`🚫 ${result.error}`);
+      return;
+    }
+    await message.reply(`🚫 *${result.task.label}* is back to normal.`);
+    console.log(`[handler] Unignored "${unignoreMatch[1]}"`);
     return;
   }
 

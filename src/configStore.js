@@ -127,6 +127,44 @@ function nextDueDate(task) {
   return computed;
 }
 
+/**
+ * Returns the task's ignore block ({ reason, until }) if it's active on the
+ * given date, else null. `until` is inclusive — the task is skipped through the
+ * end of that local day and reverts to normal the morning after. Expired
+ * blocks are pruned from the config lazily so they don't linger.
+ */
+function activeIgnore(task, date = new Date()) {
+  const ig = task.ignore;
+  if (!ig || !ig.until) return null;
+  const local = new Date(date.toLocaleString('en-US', { timeZone: config.timezone }));
+  if (dayNum(local) <= dayNum(new Date(ig.until + 'T00:00:00'))) return ig;
+  delete task.ignore;
+  save();
+  return null;
+}
+
+/**
+ * Marks a task to be skipped (with a reason) until the given date, inclusive.
+ * @param {string} taskId
+ * @param {string} until   "YYYY-MM-DD" local date the skip expires at end of
+ * @param {string} reason  shown next to the task in the status list
+ */
+function setTaskIgnore(taskId, until, reason) {
+  const task = getTask(taskId);
+  if (!task) return { ok: false, error: `Unknown task "${taskId}".` };
+  task.ignore = { reason, until };
+  save();
+  return { ok: true, task };
+}
+
+function clearTaskIgnore(taskId) {
+  const task = getTask(taskId);
+  if (!task) return { ok: false, error: `Unknown task "${taskId}".` };
+  delete task.ignore;
+  save();
+  return { ok: true, task };
+}
+
 /** Clears any active deferral on a task (called after the task is logged). */
 function clearTaskDeferral(taskId) {
   const task = getTask(taskId);
@@ -476,6 +514,9 @@ module.exports = {
   describeSchedule,
   nextDueDate,
   clearTaskDeferral,
+  activeIgnore,
+  setTaskIgnore,
+  clearTaskIgnore,
   dayBoundsUTC,
   localDateTimeToUTC,
   currentWeekRange,

@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { config, isActiveToday, currentWeekRange } = require('./configStore');
+const { config, isActiveToday, currentWeekRange, activeIgnore } = require('./configStore');
 const db = require('./db');
 const { buildCurrentStatus, buildEODStatus } = require('./status');
 const { buildWeeklyResponsibility } = require('./formatter');
@@ -42,6 +42,12 @@ function scheduleReminders(client, getGroupChatId) {
           // Skip if the task isn't scheduled for today (e.g. ears on Wed/Sun only).
           if (!isActiveToday(task)) {
             console.log(`[reminders] ${task.id} not scheduled today, skipping reminder`);
+            return;
+          }
+          // Skip if the task is deliberately paused (e.g. "vet visit").
+          const ig = activeIgnore(task);
+          if (ig) {
+            console.log(`[reminders] ${task.id} ignored (${ig.reason}) until ${ig.until}, skipping reminder`);
             return;
           }
           // Skip if the task is already done today — no need to nag.
