@@ -202,7 +202,7 @@
       ],
       "window": {
         "from": "05:00",
-        "to": "12:00"
+        "to": "10:00"
       },
       "reminders": []
     },
@@ -218,7 +218,7 @@
         "did her business"
       ],
       "window": {
-        "from": "17:00",
+        "from": "18:30",
         "to": "23:59"
       },
       "reminders": []
