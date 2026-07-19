@@ -9,7 +9,7 @@
   "tasks": [
     {
       "id": "feed_am",
-      "label": "Breakfast",
+      "label": "Breakfast (60g)",
       "emoji": "🍖",
       "keywords": [
         "fed",
@@ -28,13 +28,13 @@
       "reminders": [
         {
           "cron": "0 8 * * *",
-          "message": "Time for Bella's breakfast 🍖"
+          "message": "Time for Bella's breakfast — 60g 🍖"
         }
       ]
     },
     {
       "id": "feed_pm",
-      "label": "Dinner",
+      "label": "Dinner (30g)",
       "emoji": "🍖",
       "keywords": [
         "fed",
@@ -52,7 +52,7 @@
       "reminders": [
         {
           "cron": "0 20 * * *",
-          "message": "Time for Bella's dinner 🍖"
+          "message": "Time for Bella's dinner — 30g 🍖"
         }
       ]
     },
