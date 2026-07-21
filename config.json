@@ -28,7 +28,7 @@
       "reminders": [
         {
           "cron": "0 8 * * *",
-          "message": "Time for Bella's breakfast — 60g 🍖"
+          "message": "Time for Bella's breakfast — 60g 🍖\nKibble only — no treats or anything from the floor until the vet clears it."
         }
       ]
     },
@@ -52,7 +52,31 @@
       "reminders": [
         {
           "cron": "0 20 * * *",
-          "message": "Time for Bella's dinner — 30g 🍖"
+          "message": "Time for Bella's dinner — 30g 🍖\nKibble only — no treats or anything from the floor until the vet clears it."
+        }
+      ]
+    },
+    {
+      "id": "medicine",
+      "label": "Allergy medicine",
+      "emoji": "💊",
+      "keywords": [
+        "medicine",
+        "meds",
+        "medication",
+        "allergy medicine",
+        "allergy meds",
+        "pill",
+        "tablet"
+      ],
+      "window": {
+        "from": "14:00",
+        "to": "23:59"
+      },
+      "reminders": [
+        {
+          "cron": "0 20 * * *",
+          "message": "Give Bella her allergy medicine with dinner 💊"
         }
       ]
     },
@@ -118,74 +142,6 @@
         {
           "cron": "0 9 * * *",
           "message": "Remember to check Bella's water bowl 💧"
-        }
-      ]
-    },
-    {
-      "id": "antifungal_am",
-      "label": "Antifungal spray (AM)",
-      "emoji": "🦶",
-      "keywords": [
-        "antifungal",
-        "antifungal spray",
-        "spray",
-        "sprayed",
-        "spray feet",
-        "sprayed feet",
-        "feet spray",
-        "sprayed her feet",
-        "feet"
-      ],
-      "window": {
-        "from": "00:00",
-        "to": "14:00"
-      },
-      "schedule": {
-        "from": "2026-07-12",
-        "until": "2026-07-23"
-      },
-      "ignore": {
-        "reason": "vet visit",
-        "until": "2026-07-21"
-      },
-      "reminders": [
-        {
-          "cron": "0 9 * * *",
-          "message": "Spray Bella's feet with antifungal (morning) 🦶"
-        }
-      ]
-    },
-    {
-      "id": "antifungal_pm",
-      "label": "Antifungal spray (PM)",
-      "emoji": "🦶",
-      "keywords": [
-        "antifungal",
-        "antifungal spray",
-        "spray",
-        "sprayed",
-        "spray feet",
-        "sprayed feet",
-        "feet spray",
-        "sprayed her feet",
-        "feet"
-      ],
-      "window": {
-        "from": "14:00",
-        "to": "23:59"
-      },
-      "schedule": {
-        "from": "2026-07-12",
-        "until": "2026-07-23"
-      },
-      "ignore": {
-        "reason": "vet visit",
-        "until": "2026-07-21"
-      },
-      "reminders": [
-        {
-          "cron": "0 20 * * *",
-          "message": "Spray Bella's feet with antifungal (evening) 🦶"
         }
       ]
     },
@@ -294,7 +250,7 @@
     },
     {
       "id": "bath",
-      "label": "Bath (every 1-2 weeks)",
+      "label": "Medicated shampoo bath",
       "emoji": "🛁",
       "keywords": [
         "bath",
@@ -305,10 +261,15 @@
         "wash"
       ],
       "schedule": {
-        "everyDays": 7,
-        "anchor": "2026-06-20"
+        "everyDays": 3,
+        "anchor": "2026-07-21"
       },
-      "reminders": []
+      "reminders": [
+        {
+          "cron": "0 18 * * *",
+          "message": "Bath time for Bella 🛁 (medicated shampoo)\n\n• Leave shampoo on for 10 mins before rinsing\n• Wash body only — do NOT wash above the neck\n• Keep shampoo away from eyes (causes blindness)\n• Blow-dry with moving air — don't hold hot air on one spot"
+        }
+      ]
     },
     {
       "id": "grooming",
