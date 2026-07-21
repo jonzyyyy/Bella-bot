@@ -261,8 +261,7 @@
         "wash"
       ],
       "schedule": {
-        "everyDays": 3,
-        "anchor": "2026-07-21"
+        "daysOfWeek": [2, 6]
       },
       "reminders": [
         {
