@@ -57,8 +57,8 @@
       ]
     },
     {
-      "id": "medicine",
-      "label": "Allergy medicine",
+      "id": "medicine_am",
+      "label": "Allergy medicine (AM, half tablet)",
       "emoji": "💊",
       "keywords": [
         "medicine",
@@ -67,7 +67,39 @@
         "allergy medicine",
         "allergy meds",
         "pill",
-        "tablet"
+        "tablet",
+        "morning medicine",
+        "morning meds"
+      ],
+      "window": {
+        "from": "00:00",
+        "to": "14:00"
+      },
+      "schedule": {
+        "from": "2026-07-21",
+        "until": "2026-08-03"
+      },
+      "reminders": [
+        {
+          "cron": "0 8 * * *",
+          "message": "Give Bella her allergy medicine — half tablet with breakfast 💊 (twice-daily course, through 3 Aug)"
+        }
+      ]
+    },
+    {
+      "id": "medicine",
+      "label": "Allergy medicine (PM, half tablet)",
+      "emoji": "💊",
+      "keywords": [
+        "medicine",
+        "meds",
+        "medication",
+        "allergy medicine",
+        "allergy meds",
+        "pill",
+        "tablet",
+        "evening medicine",
+        "evening meds"
       ],
       "window": {
         "from": "14:00",
@@ -76,7 +108,7 @@
       "reminders": [
         {
           "cron": "0 20 * * *",
-          "message": "Give Bella her allergy medicine with dinner 💊"
+          "message": "Give Bella her allergy medicine — half tablet with dinner 💊"
         }
       ]
     },
@@ -223,7 +255,7 @@
     },
     {
       "id": "teeth",
-      "label": "Teeth brushed",
+      "label": "Teeth brushed (no toothpaste)",
       "emoji": "🦷",
       "keywords": [
         "brush teeth",
@@ -240,11 +272,11 @@
       "reminders": [
         {
           "cron": "30 8 * * *",
-          "message": "Time to brush Bella's teeth 🦷"
+          "message": "Time to brush Bella's teeth 🦷 (no toothpaste)"
         },
         {
           "cron": "30 20 * * *",
-          "message": "Don't forget to brush Bella's teeth tonight 🦷"
+          "message": "Don't forget to brush Bella's teeth tonight 🦷 (no toothpaste)"
         }
       ]
     },
