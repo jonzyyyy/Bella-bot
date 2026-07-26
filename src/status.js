@@ -58,17 +58,18 @@ let statusChain = Promise.resolve();
 
 /**
  * Replaces today's status message: deletes the one(s) already posted, then
- * sends a fresh one to `chatId`.
- * The EOD daily summary is NOT routed through here so it is never deleted.
+ * sends a fresh one to `chatId`. There is only ever one full task list in the
+ * group per day — the end-of-day summary goes through here too (eod: true), so
+ * at 9pm it takes over the day's list rather than adding a second one.
  */
-function sendStatus(chatId, client) {
+function sendStatus(chatId, client, { eod = false } = {}) {
   statusChain = statusChain
-    .then(() => postStatus(chatId, client))
+    .then(() => postStatus(chatId, client, eod))
     .catch((err) => console.error('[status] Failed to send status:', err.message));
   return statusChain;
 }
 
-async function postStatus(chatId, client) {
+async function postStatus(chatId, client, eod) {
   const date = todayStr();
 
   // Clear every status tracked for today, not just the newest — if a delete
@@ -87,8 +88,11 @@ async function postStatus(chatId, client) {
   // Sent as a plain message, never a reply: a reply quotes the reminder (or the
   // user's own text) back into the group, which both doubles the text and makes
   // the just-deleted reminder look like it's still there.
+  const body = eod
+    ? `📊 *End-of-day check* — everything should be done by now:\n\n${buildCurrentStatus()}`
+    : buildCurrentStatus();
   const chat = await client.getChatById(chatId);
-  const sent = await chat.sendMessage(buildCurrentStatus());
+  const sent = await chat.sendMessage(body);
   if (sent?.id) {
     db.saveStatusMessage(sent.id._serialized ?? sent.id.id, chatId, date);
   }

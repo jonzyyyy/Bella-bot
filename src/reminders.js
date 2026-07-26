@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const { config, isActiveToday, currentWeekRange, activeIgnore, currentAssignee } = require('./configStore');
 const db = require('./db');
-const { buildCurrentStatus, buildEODStatus } = require('./status');
+const { buildEODStatus, sendStatus } = require('./status');
 const { buildWeeklyResponsibility } = require('./formatter');
 const { notify } = require('./notify');
 
@@ -122,9 +122,9 @@ function scheduleReminders(client, getGroupChatId) {
           return;
         }
         try {
-          const chat = await client.getChatById(chatId);
-          const text = `📊 *End-of-day check* — everything should be done by now:\n\n${buildEODStatus()}`;
-          await chat.sendMessage(text);
+          // Goes through sendStatus so it replaces the day's running list
+          // instead of leaving a second full list in the group.
+          await sendStatus(chatId, client, { eod: true });
           notify('📊 End-of-day check', buildEODStatus());
           console.log('[reminders] Sent daily summary');
         } catch (err) {
