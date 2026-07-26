@@ -50,28 +50,47 @@ function todayStr() {
   return new Date().toLocaleDateString('en-CA', { timeZone: config.timezone });
 }
 
+// Two completions seconds apart (e.g. 👍 on breakfast then on medicine) used to
+// run concurrently: both read "no previous status yet" and both posted one,
+// leaving a stale list in the group. Chaining the sends makes each one see the
+// previous message id and delete it.
+let statusChain = Promise.resolve();
+
 /**
- * Deletes the previous status message for today (if any), sends a new one as
- * a reply to `replyTarget`, then tracks the new message id for future deletion.
+ * Replaces today's status message: deletes the one(s) already posted, then
+ * sends a fresh one to `chatId`.
  * The EOD daily summary is NOT routed through here so it is never deleted.
  */
-async function sendStatus(replyTarget, client) {
+function sendStatus(chatId, client) {
+  statusChain = statusChain
+    .then(() => postStatus(chatId, client))
+    .catch((err) => console.error('[status] Failed to send status:', err.message));
+  return statusChain;
+}
+
+async function postStatus(chatId, client) {
   const date = todayStr();
 
-  const prev = db.getLatestStatusMessage(date);
-  if (prev) {
+  // Clear every status tracked for today, not just the newest — if a delete
+  // ever fails the message is stranded in the chat forever otherwise.
+  for (const prev of db.getStatusMessages(date)) {
     try {
       const prevMsg = await client.getMessageById(prev.message_id);
       if (prevMsg) await prevMsg.delete(true);
-    } catch (_) {}
+      else console.warn(`[status] Previous status ${prev.message_id} not found (already gone?)`);
+    } catch (err) {
+      console.error('[status] Could not delete previous status:', err.message);
+    }
     db.removeStatusMessage(prev.id);
   }
 
-  const sent = await replyTarget.reply(buildCurrentStatus());
+  // Sent as a plain message, never a reply: a reply quotes the reminder (or the
+  // user's own text) back into the group, which both doubles the text and makes
+  // the just-deleted reminder look like it's still there.
+  const chat = await client.getChatById(chatId);
+  const sent = await chat.sendMessage(buildCurrentStatus());
   if (sent?.id) {
-    const msgId = sent.id._serialized ?? sent.id.id;
-    const chatId = sent.to ?? sent.id?.remote ?? '';
-    db.saveStatusMessage(msgId, chatId, date);
+    db.saveStatusMessage(sent.id._serialized ?? sent.id.id, chatId, date);
   }
 }
 

@@ -1,4 +1,4 @@
-const { config, describeSchedule, activeIgnore } = require('./configStore');
+const { config, describeSchedule, activeIgnore, currentAssignee } = require('./configStore');
 
 const NUMBER_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
 
@@ -33,7 +33,8 @@ function buildStatusMessage(taskData, date = new Date()) {
 
   taskData.forEach(({ task, completions, daysOverdue = 0 }, i) => {
     const num = NUMBER_EMOJIS[i] ?? `${i + 1}.`;
-    const label = task.assignee?.name ? `${task.label} 👤${task.assignee.name}` : task.label;
+    const assignee = currentAssignee(task);
+    const label = assignee?.name ? `${task.label} 👤${assignee.name}` : task.label;
     if (completions.length === 0) {
       // An active ignore ({ reason, until }) softens the ❌ to a neutral ✖ and
       // explains why the task is deliberately being skipped right now.

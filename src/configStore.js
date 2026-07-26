@@ -248,16 +248,17 @@ function getTask(taskId) {
 }
 
 /**
- * Assigns a person to a task. The assignee is stored as { id, name } so
- * reminders can @mention the id and the status list can show the name.
+ * Assigns one or more people to a task, stored as { id, name }[] so reminders
+ * can @mention the id and the status list can show the name.
+ * With more than one, they rotate — see currentAssignee().
  * @param {string} taskId
- * @param {{ id: string, name: string }} assignee  WhatsApp id + display name
+ * @param {{ id: string, name: string }[]} assignees
  * @returns {{ ok: true, task } | { ok: false, error: string }}
  */
-function setTaskAssignee(taskId, assignee) {
+function setTaskAssignees(taskId, assignees) {
   const task = getTask(taskId);
   if (!task) return { ok: false, error: `Unknown task "${taskId}".` };
-  task.assignee = { id: assignee.id, name: assignee.name };
+  task.assignees = assignees.map((a) => ({ id: a.id, name: a.name }));
   save();
   return { ok: true, task };
 }
@@ -265,9 +266,23 @@ function setTaskAssignee(taskId, assignee) {
 function clearTaskAssignee(taskId) {
   const task = getTask(taskId);
   if (!task) return { ok: false, error: `Unknown task "${taskId}".` };
-  delete task.assignee;
+  delete task.assignees;
   save();
   return { ok: true, task };
+}
+
+/**
+ * Returns the assignee currently "on duty" for a task ({ id, name }), or null
+ * if unassigned. With multiple assignees they rotate by the task's all-time
+ * completion count, so each occurrence tags the next person in line — a
+ * missed/skipped occurrence just holds the turn rather than skipping it.
+ */
+function currentAssignee(task) {
+  const list = task.assignees;
+  if (!list || list.length === 0) return null;
+  if (list.length === 1) return list[0];
+  const count = db.getCompletionCount(task.id);
+  return list[count % list.length];
 }
 
 /**
@@ -523,8 +538,9 @@ module.exports = {
   getTask,
   setTaskTimes,
   setTaskSchedule,
-  setTaskAssignee,
+  setTaskAssignees,
   clearTaskAssignee,
+  currentAssignee,
   addTask,
   removeTask,
 };

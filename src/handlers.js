@@ -1,7 +1,7 @@
 const {
   config, save, cronToTime, setTaskTimes, setTaskSchedule, addTask, removeTask,
   extractTimeFromText, describeSchedule, parseTimeToCron, getTask, currentWeekRange, dayBoundsUTC,
-  nextDueDate, clearTaskDeferral, setTaskAssignee, clearTaskAssignee, localDateTimeToUTC,
+  nextDueDate, clearTaskDeferral, setTaskAssignees, clearTaskAssignee, currentAssignee, localDateTimeToUTC,
   setTaskIgnore, clearTaskIgnore,
 } = require('./configStore');
 const db = require('./db');
@@ -221,7 +221,7 @@ async function handleMessage(message, client) {
         await message.react('✅');
         notify('✅ Task completed', `${pending.task.label} — by ${pending.triggeredBy} (confirmed)`);
         await deleteTaskReminders(pending.task.id, client);
-        if (config.statusAfterCompletion) await sendStatus(message, client);
+        if (config.statusAfterCompletion) await sendStatus(chatId, client);
         console.log(`[handler] Confirmed duplicate "${pending.task.id}" by ${pending.triggeredBy}`);
       }
       return;
@@ -298,6 +298,7 @@ async function handleMessage(message, client) {
       }
       lines.push('');
       lines.push('_Assign with_ `assign <task> <number>` _e.g._ `assign feed_pm 6591234567`');
+      lines.push('_Alternate between people:_ `assign <task> <number1> <number2>`');
       await message.reply(lines.join('\n'));
     } catch (err) {
       await message.reply(`👥 Couldn't read the member list: ${err.message}`);
@@ -305,8 +306,10 @@ async function handleMessage(message, client) {
     return;
   }
 
-  // ── assign a person to a task ──────────────────────────────────────────────
-  //   "assign feed_pm 6591234567"  or  "assign feed_pm @mention"
+  // ── assign one or more people to a task ─────────────────────────────────────
+  //   "assign feed_pm 6591234567"            → single assignee
+  //   "assign feed_pm @Alice @Bob"           → alternates each time it's done
+  //   "assign feed_pm 6591234567 6598765432" → same, via numbers
   const assignMatch = body.match(/^\s*assign\s+(\w+)\s+(.+)$/i);
   if (assignMatch) {
     const taskId = assignMatch[1];
@@ -314,31 +317,43 @@ async function handleMessage(message, client) {
       await message.reply(`👥 Unknown task "${taskId}". Send \`reminders\` to see task ids.`);
       return;
     }
-    // Prefer an @mention if the message carries one, else parse a raw number.
-    let wid = null;
+    // Prefer @mentions (there may be several) if the message carries any,
+    // else parse raw numbers separated by spaces/commas.
+    let wids = [];
     const mentioned = await message.getMentions().catch(() => []);
     if (mentioned && mentioned.length > 0) {
-      wid = mentioned[0].id?._serialized;
+      wids = mentioned.map((c) => c.id?._serialized).filter(Boolean);
     } else {
-      const digits = assignMatch[2].replace(/\D/g, '');
-      if (digits) wid = `${digits}@c.us`;
+      wids = assignMatch[2]
+        .split(/[,\s]+/)
+        .map((tok) => tok.replace(/\D/g, ''))
+        .filter(Boolean)
+        .map((digits) => `${digits}@c.us`);
     }
-    if (!wid) {
-      await message.reply('👥 Give a phone number or @mention. E.g. `assign feed_pm 6591234567`');
+    if (wids.length === 0) {
+      await message.reply('👥 Give one or more phone numbers or @mentions. E.g. `assign feed_pm 6591234567` or `assign feed_pm @Alice @Bob` to alternate.');
       return;
     }
-    let name = wid.split('@')[0];
-    try {
-      const contact = await client.getContactById(wid);
-      name = contact.pushname || contact.name || contact.number || name;
-    } catch (_) {}
-    const result = setTaskAssignee(taskId, { id: wid, name });
+    const assignees = [];
+    for (const wid of wids) {
+      let name = wid.split('@')[0];
+      try {
+        const contact = await client.getContactById(wid);
+        name = contact.pushname || contact.name || contact.number || name;
+      } catch (_) {}
+      assignees.push({ id: wid, name });
+    }
+    const result = setTaskAssignees(taskId, assignees);
     if (!result.ok) {
       await message.reply(`👥 ${result.error}`);
       return;
     }
-    await message.reply(`👥 *${result.task.label}* is now assigned to *${name}* — they'll be @mentioned on its reminders.`);
-    console.log(`[handler] Assigned "${taskId}" → ${name} (${wid})`);
+    const names = assignees.map((a) => a.name);
+    const reply = names.length > 1
+      ? `👥 *${result.task.label}* now alternates between *${names.join('*, *')}* — they'll take turns being @mentioned, rotating each time it's completed.`
+      : `👥 *${result.task.label}* is now assigned to *${names[0]}* — they'll be @mentioned on its reminders.`;
+    await message.reply(reply);
+    console.log(`[handler] Assigned "${taskId}" → ${names.join(', ')}`);
     return;
   }
 
@@ -395,13 +410,21 @@ async function handleMessage(message, client) {
 
   // ── list current assignments ───────────────────────────────────────────────
   if (/^\s*assignments\s*$/i.test(body)) {
-    const assigned = config.tasks.filter((t) => t.assignee?.name);
+    const assigned = config.tasks.filter((t) => t.assignees?.length);
     if (assigned.length === 0) {
       await message.reply('👥 No tasks are assigned yet. Use `members` then `assign <task> <number>`.');
       return;
     }
     const lines = ['👥 *Task assignments*'];
-    for (const t of assigned) lines.push(`• ${t.label} → *${t.assignee.name}*`);
+    for (const t of assigned) {
+      const names = t.assignees.map((a) => a.name);
+      if (names.length > 1) {
+        const next = currentAssignee(t)?.name;
+        lines.push(`• ${t.label} → alternating: ${names.join(' ↔ ')} _(next: ${next})_`);
+      } else {
+        lines.push(`• ${t.label} → *${names[0]}*`);
+      }
+    }
     await message.reply(lines.join('\n'));
     return;
   }
@@ -610,7 +633,7 @@ async function handleMessage(message, client) {
         return;
       }
     }
-    await sendStatus(message, client);
+    await sendStatus(chatId, client);
     return;
   }
 
@@ -691,7 +714,7 @@ async function handleMessage(message, client) {
 
     notify('✅ Task completed', `${task.label} — by ${userName}${when ? ' at ' + fmtTime(when.toISOString()) : ''}`);
     await deleteTaskReminders(task.id, client);
-    if (config.statusAfterCompletion) await sendStatus(message, client);
+    if (config.statusAfterCompletion) await sendStatus(chatId, client);
     console.log(`[handler] ${userName} completed "${task.id}"${when ? ' at ' + when.toLocaleTimeString() : ''}`);
 
     // After logging NexGard, auto-defer Drontal if the next due date falls
@@ -760,15 +783,16 @@ async function handleReaction(reaction, client) {
   notify('✅ Task completed', `${task.label} — by ${userName} (👍 reaction)`);
   console.log(`[handler] ${userName} completed "${task.id}" via reaction`);
 
-  // Confirm with a ✅ react on the reminder, delete it, then post the updated status.
+  // Remove the reminder, then post the updated status. No ✅ react and no reply
+  // to the reminder — it's about to be deleted, and a reply would quote its text
+  // back into the group (which is what made it look like it was never deleted).
+  const chatId = reaction.msgId?.remote;
   try {
-    const msg = await client.getMessageById(msgId);
-    if (msg) {
-      await msg.react('✅');
-      await deleteTaskReminders(task.id, client);
-      if (config.statusAfterCompletion) await sendStatus(msg, client);
-    }
-  } catch (_) {}
+    await deleteTaskReminders(task.id, client);
+    if (config.statusAfterCompletion && chatId) await sendStatus(chatId, client);
+  } catch (err) {
+    console.error('[handler] Failed to clean up after reaction:', err.message);
+  }
 }
 
 module.exports = { handleMessage, handleReaction };

@@ -57,6 +57,10 @@ function getLastCompletion(task) {
     .get(task);
 }
 
+function getCompletionCount(task) {
+  return db.prepare('SELECT COUNT(*) as c FROM completions WHERE task = ?').get(task).c;
+}
+
 function getCompletionsLast7Days(task) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 7);
@@ -111,10 +115,11 @@ function saveStatusMessage(messageId, chatId, date) {
   ).run(messageId, chatId, date);
 }
 
-function getLatestStatusMessage(date) {
+/** All statuses posted on `date` — usually one, but a failed delete can strand extras. */
+function getStatusMessages(date) {
   return db
-    .prepare('SELECT * FROM status_messages WHERE date = ? ORDER BY id DESC LIMIT 1')
-    .get(date);
+    .prepare('SELECT * FROM status_messages WHERE date = ? ORDER BY id ASC')
+    .all(date);
 }
 
 function removeStatusMessage(id) {
@@ -159,6 +164,7 @@ module.exports = {
   logCompletion,
   getCompletionsToday,
   getLastCompletion,
+  getCompletionCount,
   getCompletionsLast7Days,
   resetToday,
   resetAll,
@@ -167,7 +173,7 @@ module.exports = {
   getActiveReminderMessages,
   removeReminderMessagesForTask,
   saveStatusMessage,
-  getLatestStatusMessage,
+  getStatusMessages,
   removeStatusMessage,
   undoLastCompletion,
   getCompletionsBetween,

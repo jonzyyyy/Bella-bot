@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { config, isActiveToday, currentWeekRange, activeIgnore } = require('./configStore');
+const { config, isActiveToday, currentWeekRange, activeIgnore, currentAssignee } = require('./configStore');
 const db = require('./db');
 const { buildCurrentStatus, buildEODStatus } = require('./status');
 const { buildWeeklyResponsibility } = require('./formatter');
@@ -82,19 +82,22 @@ function scheduleReminders(client, getGroupChatId) {
             // reminders — the disclaimer text contains "fed her" as an example,
             // which would otherwise be read as a feed completion.
             // If the task has an assignee, @mention them so their phone pings.
+            // With multiple assignees, currentAssignee() picks whoever is due
+            // for this occurrence based on the task's completion count so far.
             let body = `🔔 ${reminder.message}`;
             const sendOpts = {};
-            if (task.assignee?.id) {
-              const num = task.assignee.id.split('@')[0];
+            const assignee = currentAssignee(task);
+            if (assignee?.id) {
+              const num = assignee.id.split('@')[0];
               body += `\n\n@${num}, you're on this one 🙌`;
-              sendOpts.mentions = [task.assignee.id];
+              sendOpts.mentions = [assignee.id];
             }
             const text = `${body}\n\n${buildDisclaimer(task)}`;
             const sent = await chat.sendMessage(text, sendOpts);
             db.saveReminderMessage(task.id, sent.id._serialized ?? sent.id.id, chatId);
             notify(
               `🔔 ${config.petName} reminder`,
-              task.assignee?.name ? `${reminder.message} (${task.assignee.name}'s turn)` : reminder.message
+              assignee?.name ? `${reminder.message} (${assignee.name}'s turn)` : reminder.message
             );
             console.log(`[reminders] Sent reminder for ${task.id}`);
           } catch (err) {
