@@ -8,7 +8,7 @@ const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
 const { buildHistoryMessage, buildRemindersMessage, buildWeeklyResponsibility, fmtTime } = require('./formatter');
 const { rescheduleReminders } = require('./reminders');
-const { buildCurrentStatus, buildHistoricalStatus, sendStatus } = require('./status');
+const { buildCurrentStatus, buildHistoricalStatus, sendStatus, revokeMessage } = require('./status');
 const { notify } = require('./notify');
 
 /**
@@ -125,21 +125,26 @@ function extractDateFromText(body) {
 }
 
 async function deleteTaskReminders(taskId, client) {
-  const records = db.getActiveReminderMessages(taskId);
-  for (const rec of records) {
+  // Anything older than the revoke window is unreachable — drop it rather than
+  // re-attempting months-old messages on every completion.
+  db.purgeOldReminderMessages();
+
+  for (const rec of db.getActiveReminderMessages(taskId)) {
+    let gone = false;
     try {
-      const msg = await client.getMessageById(rec.message_id);
-      if (msg) {
-        await msg.delete(true);
-        console.log(`[handler] Deleted reminder message for ${taskId}`);
-      } else {
-        console.warn(`[handler] Reminder message ${rec.message_id} not found (already gone?)`);
-      }
+      // revokeMessage verifies the delete actually landed — delete(true) on its
+      // own silently downgrades to a delete-for-me and reports success.
+      gone = await revokeMessage(client, rec.message_id);
     } catch (err) {
       console.error(`[handler] Failed to delete reminder for ${taskId}:`, err.message);
     }
+    if (gone) {
+      db.removeReminderMessage(rec.id);
+      console.log(`[handler] Deleted reminder message for ${taskId}`);
+    } else {
+      console.warn(`[handler] Reminder for ${taskId} survived deletion — retrying next time`);
+    }
   }
-  db.removeReminderMessagesForTask(taskId);
 }
 
 /**

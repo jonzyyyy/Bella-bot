@@ -103,8 +103,18 @@ function getActiveReminderMessages(taskId) {
   return db.prepare('SELECT * FROM reminder_messages WHERE task = ?').all(taskId);
 }
 
-function removeReminderMessagesForTask(taskId) {
-  db.prepare('DELETE FROM reminder_messages WHERE task = ?').run(taskId);
+function removeReminderMessage(id) {
+  db.prepare('DELETE FROM reminder_messages WHERE id = ?').run(id);
+}
+
+/**
+ * Drops reminder rows older than `days`. A reminder past WhatsApp's revoke
+ * window can never be deleted, so without this the retry list would grow
+ * forever and every completion would re-try months-old messages.
+ */
+function purgeOldReminderMessages(days = 2) {
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  return db.prepare('DELETE FROM reminder_messages WHERE sent_at < ?').run(cutoff).changes;
 }
 
 // ── status message tracking ───────────────────────────────────────────────────
@@ -124,6 +134,11 @@ function getStatusMessages(date) {
 
 function removeStatusMessage(id) {
   db.prepare('DELETE FROM status_messages WHERE id = ?').run(id);
+}
+
+/** Forgets statuses from earlier days — they're past the point of being deletable. */
+function purgeStatusMessagesBefore(date) {
+  db.prepare('DELETE FROM status_messages WHERE date < ?').run(date);
 }
 
 function getCompletionsBetween(task, startISO, endISO) {
@@ -171,10 +186,12 @@ module.exports = {
   saveReminderMessage,
   findTaskByMessageId,
   getActiveReminderMessages,
-  removeReminderMessagesForTask,
+  removeReminderMessage,
+  purgeOldReminderMessages,
   saveStatusMessage,
   getStatusMessages,
   removeStatusMessage,
+  purgeStatusMessagesBefore,
   undoLastCompletion,
   getCompletionsBetween,
   getLastCompletionWithinMinutes,
