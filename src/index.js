@@ -77,11 +77,17 @@ async function resolveGroupChatId(retries = 5) {
 async function probeRevoke() {
   try {
     const db = require('./db');
-    const { diagnoseRevoke } = require('./debugRevoke');
+    const { diagnoseRevoke, tryRevokeSignatures } = require('./debugRevoke');
     const date = new Date().toLocaleDateString('en-CA', { timeZone: config.timezone });
     const chat = await client.getChatById(groupChatId);
     await chat.fetchMessages({ limit: 30 });
-    await diagnoseRevoke(client, db.getStatusMessages(date).map((r) => r.message_id));
+    const ids = db.getStatusMessages(date).map((r) => r.message_id);
+    await diagnoseRevoke(client, ids);
+    // BELLA_DEBUG_REVOKE=2 additionally tests which revoke signature works, by
+    // actually revoking the leftover status lists.
+    if (process.env.BELLA_DEBUG_REVOKE === '2' && ids.length > 0) {
+      await tryRevokeSignatures(client, ids[0]);
+    }
   } catch (err) {
     console.error('[revoke-debug] Probe aborted:', err.message);
   }
@@ -100,7 +106,7 @@ client.on('qr', (qr) => {
 client.on('ready', async () => {
   console.log('[bot] Client is ready!');
   const ok = await resolveGroupChatId();
-  if (process.env.BELLA_DEBUG_REVOKE === '1' && groupChatId) await probeRevoke();
+  if (process.env.BELLA_DEBUG_REVOKE && groupChatId) await probeRevoke();
   scheduleReminders(client, () => groupChatId);
   // Only stand down the watchdog if WhatsApp actually responded; if getChats
   // errored the whole way, let the watchdog restart us for a clean retry.
