@@ -71,6 +71,22 @@ async function resolveGroupChatId(retries = 5) {
   return false;
 }
 
+// Diagnostic only (BELLA_DEBUG_REVOKE=1): reports why WhatsApp is refusing to
+// revoke the status messages we failed to delete. Loads recent history first so
+// the probe sees the same message state a real delete would.
+async function probeRevoke() {
+  try {
+    const db = require('./db');
+    const { diagnoseRevoke } = require('./debugRevoke');
+    const date = new Date().toLocaleDateString('en-CA', { timeZone: config.timezone });
+    const chat = await client.getChatById(groupChatId);
+    await chat.fetchMessages({ limit: 30 });
+    await diagnoseRevoke(client, db.getStatusMessages(date).map((r) => r.message_id));
+  } catch (err) {
+    console.error('[revoke-debug] Probe aborted:', err.message);
+  }
+}
+
 // ── Event handlers ────────────────────────────────────────────────────────────
 
 client.on('qr', (qr) => {
@@ -84,6 +100,7 @@ client.on('qr', (qr) => {
 client.on('ready', async () => {
   console.log('[bot] Client is ready!');
   const ok = await resolveGroupChatId();
+  if (process.env.BELLA_DEBUG_REVOKE === '1' && groupChatId) await probeRevoke();
   scheduleReminders(client, () => groupChatId);
   // Only stand down the watchdog if WhatsApp actually responded; if getChats
   // errored the whole way, let the watchdog restart us for a clean retry.
