@@ -77,7 +77,7 @@ async function resolveGroupChatId(retries = 5) {
 async function probeRevoke() {
   try {
     const db = require('./db');
-    const { diagnoseRevoke, tryRevokeSignatures } = require('./debugRevoke');
+    const { diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath } = require('./debugRevoke');
     const date = new Date().toLocaleDateString('en-CA', { timeZone: config.timezone });
     const chat = await client.getChatById(groupChatId);
     await chat.fetchMessages({ limit: 30 });
@@ -87,6 +87,9 @@ async function probeRevoke() {
     // actually revoking the leftover status lists.
     if (process.env.BELLA_DEBUG_REVOKE === '2' && ids.length > 0) {
       await tryRevokeSignatures(client, ids);
+    }
+    if (process.env.BELLA_DEBUG_REVOKE === '3' && ids.length > 0) {
+      await testLibraryDeletePath(client, ids);
     }
   } catch (err) {
     console.error('[revoke-debug] Probe aborted:', err.message);

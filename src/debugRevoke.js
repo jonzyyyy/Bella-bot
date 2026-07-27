@@ -127,4 +127,47 @@ async function revokeSignatureRun(client, messageId) {
   }, messageId);
 }
 
-module.exports = { diagnoseRevoke, tryRevokeSignatures };
+/**
+ * Runs the real production path — Message.delete(true) — against one surviving
+ * message, and reports the version gate that picks the revoke signature.
+ *
+ * A direct Cmd.sendRevokeMsgs call revokes these messages instantly, while
+ * delete(true) leaves them untouched. Either the version gate is choosing the
+ * wrong signature, or the revoke works and our verification just checks before
+ * WhatsApp has updated the local model. This distinguishes the two.
+ *
+ * Enable with BELLA_DEBUG_REVOKE=3.
+ */
+async function testLibraryDeletePath(client, messageIds) {
+  const gate = await client.pupPage.evaluate(() => ({
+    version: window.Debug?.VERSION,
+    comparesNewer: window.WWebJS?.compareWwebVersions?.(window.Debug?.VERSION, '>=', '2.3000.0'),
+  }));
+  console.log(`[revoke-debug] version gate → ${JSON.stringify(gate)}`);
+
+  for (const messageId of messageIds) {
+    const msg = await client.getMessageById(messageId).catch(() => null);
+    if (!msg || msg.type === 'revoked') continue;
+
+    let threw = null;
+    try {
+      await msg.delete(true);
+    } catch (err) {
+      threw = err.message;
+    }
+
+    const immediate = await client.getMessageById(messageId).catch(() => null);
+    await new Promise((r) => setTimeout(r, 5000));
+    const settled = await client.getMessageById(messageId).catch(() => null);
+
+    console.log(`[revoke-debug] library delete on ${messageId} → ${JSON.stringify({
+      threw,
+      typeImmediately: immediate ? immediate.type : 'gone',
+      typeAfter5s: settled ? settled.type : 'gone',
+    })}`);
+    return;
+  }
+  console.log('[revoke-debug] No surviving message to test the library path against.');
+}
+
+module.exports = { diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath };
