@@ -69,59 +69,60 @@ function sendStatus(chatId, client, { eod = false } = {}) {
   return statusChain;
 }
 
-/**
- * Deletes one of the bot's own messages for everyone, and reports whether it
- * actually worked.
- *
- * Message.delete(true) is not trustworthy on its own: whatsapp-web.js asks
- * WhatsApp whether the message can be revoked and, if the answer is no,
- * silently downgrades to a delete-for-me and still resolves successfully. The
- * answer is no when WhatsApp only has a stub of the message rather than a full
- * model, which is what left status lists sitting in the group with nothing in
- * the logs. Re-reading the message afterwards is the only way to know.
- *
- * @returns {Promise<boolean>} true once the message is gone from the chat
- */
-async function revokeMessage(client, messageId) {
+// A revoke doesn't show up in the local message model straight away: measured
+// on the pinned web build, a message still reads as type "chat" immediately
+// after delete() and only reads as gone a few seconds later. Checking sooner
+// reports working deletes as failures.
+const REVOKE_SETTLE_MS = 5000;
+
+// Give up on a message after this many failed attempts rather than retrying a
+// stuck message on every completion for the rest of the day.
+const MAX_DELETE_ATTEMPTS = 3;
+
+const settle = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** True once WhatsApp no longer holds the message as a normal chat message. */
+async function isGone(client, messageId) {
   const msg = await client.getMessageById(messageId).catch(() => null);
-  if (!msg || msg.type === 'revoked') return true; // already gone
-
-  await msg.delete(true);
-
-  const after = await client.getMessageById(messageId).catch(() => null);
-  return !after || after.type === 'revoked';
+  return !msg || msg.type === 'revoked';
 }
 
 async function postStatus(chatId, client, eod) {
   const date = todayStr();
   const chat = await client.getChatById(chatId);
 
-  // Pull recent history into WhatsApp's in-memory store before deleting: a
-  // message it only has a stub of fails the revoke check above.
+  // Pull recent history into WhatsApp's in-memory store so the messages we're
+  // about to delete are loaded and addressable.
   try {
     await chat.fetchMessages({ limit: 30 });
   } catch (err) {
     console.warn('[status] Could not preload recent messages:', err.message);
   }
 
-  // Clear every status still tracked for today, not just the newest. A row is
-  // dropped only once the message is confirmed gone, so a revoke that didn't
-  // take is retried on the next completion instead of stranding a second list.
+  // Clear every status still tracked for today, not just the newest. Delete
+  // them all first and verify once afterwards, so the wait for WhatsApp to
+  // catch up is paid a single time rather than per message.
   db.purgeStatusMessagesBefore(date);
+  const pending = [];
   for (const prev of db.getStatusMessages(date)) {
-    let gone = false;
     try {
-      gone = await revokeMessage(client, prev.message_id);
+      if (await isGone(client, prev.message_id)) {
+        db.removeStatusMessage(prev.id);
+        continue;
+      }
+      const msg = await client.getMessageById(prev.message_id);
+      await msg.delete(true);
+      pending.push(prev);
     } catch (err) {
       console.error('[status] Could not delete previous status:', err.message);
-    }
-    if (gone) {
-      db.removeStatusMessage(prev.id);
-    } else {
-      console.warn(`[status] Previous status ${prev.message_id} survived deletion — retrying next time`);
+      pending.push(prev);
     }
   }
 
+  // Post the new list before verifying: the deletes are already issued, and
+  // waiting on WhatsApp to catch up first would just delay the reply people are
+  // waiting for after reacting.
+  //
   // Sent as a plain message, never a reply: a reply quotes the reminder (or the
   // user's own text) back into the group, which both doubles the text and makes
   // the just-deleted reminder look like it's still there.
@@ -131,6 +132,20 @@ async function postStatus(chatId, client, eod) {
   const sent = await chat.sendMessage(body);
   if (sent?.id) {
     db.saveStatusMessage(sent.id._serialized ?? sent.id.id, chatId, date);
+  }
+
+  if (pending.length === 0) return;
+  await settle(REVOKE_SETTLE_MS);
+  for (const prev of pending) {
+    if (await isGone(client, prev.message_id)) {
+      db.removeStatusMessage(prev.id);
+    } else if (prev.attempts + 1 >= MAX_DELETE_ATTEMPTS) {
+      console.error(`[status] Giving up on ${prev.message_id} after ${MAX_DELETE_ATTEMPTS} attempts`);
+      db.removeStatusMessage(prev.id);
+    } else {
+      console.warn(`[status] ${prev.message_id} still present — retrying next time`);
+      db.bumpStatusAttempt(prev.id);
+    }
   }
 }
 
@@ -156,4 +171,4 @@ function buildHistoricalStatus(dateStr, startISO, endISO) {
   return buildStatusMessage(taskData, new Date(startISO));
 }
 
-module.exports = { buildCurrentStatus, buildEODStatus, buildHistoricalStatus, sendStatus, revokeMessage };
+module.exports = { buildCurrentStatus, buildEODStatus, buildHistoricalStatus, sendStatus };

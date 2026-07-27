@@ -32,6 +32,14 @@ db.exec(`
   );
 `);
 
+// Added later — counts delete attempts so a message that can never be revoked
+// is eventually given up on instead of being retried forever.
+try {
+  db.exec('ALTER TABLE status_messages ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0');
+} catch (_) {
+  // Column already exists.
+}
+
 // ── completions ──────────────────────────────────────────────────────────────
 
 function logCompletion(task, userName, timestamp) {
@@ -136,9 +144,19 @@ function removeStatusMessage(id) {
   db.prepare('DELETE FROM status_messages WHERE id = ?').run(id);
 }
 
-/** Forgets statuses from earlier days — they're past the point of being deletable. */
+function bumpStatusAttempt(id) {
+  db.prepare('UPDATE status_messages SET attempts = attempts + 1 WHERE id = ?').run(id);
+}
+
+/**
+ * Forgets statuses from earlier days — they're past the point of being
+ * deletable. Rows written before this table standardised on "YYYY-MM-DD" hold
+ * dates like "6/29/2026", which no string comparison against today's date will
+ * match, so they're cleared by shape instead.
+ */
 function purgeStatusMessagesBefore(date) {
   db.prepare('DELETE FROM status_messages WHERE date < ?').run(date);
+  db.prepare("DELETE FROM status_messages WHERE date NOT LIKE '____-__-__'").run();
 }
 
 function getCompletionsBetween(task, startISO, endISO) {
@@ -191,6 +209,7 @@ module.exports = {
   saveStatusMessage,
   getStatusMessages,
   removeStatusMessage,
+  bumpStatusAttempt,
   purgeStatusMessagesBefore,
   undoLastCompletion,
   getCompletionsBetween,

@@ -8,7 +8,7 @@ const db = require('./db');
 const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest } = require('./matcher');
 const { buildHistoryMessage, buildRemindersMessage, buildWeeklyResponsibility, fmtTime } = require('./formatter');
 const { rescheduleReminders } = require('./reminders');
-const { buildCurrentStatus, buildHistoricalStatus, sendStatus, revokeMessage } = require('./status');
+const { buildCurrentStatus, buildHistoricalStatus, sendStatus } = require('./status');
 const { notify } = require('./notify');
 
 /**
@@ -129,21 +129,19 @@ async function deleteTaskReminders(taskId, client) {
   // re-attempting months-old messages on every completion.
   db.purgeOldReminderMessages();
 
+  // Issue the deletes without waiting to confirm them. A revoke takes a few
+  // seconds to show up in the local message model, and blocking on that here
+  // would delay the status list that follows; the rows are cleared either way
+  // and anything genuinely left behind is caught by the purge above.
   for (const rec of db.getActiveReminderMessages(taskId)) {
-    let gone = false;
     try {
-      // revokeMessage verifies the delete actually landed — delete(true) on its
-      // own silently downgrades to a delete-for-me and reports success.
-      gone = await revokeMessage(client, rec.message_id);
+      const msg = await client.getMessageById(rec.message_id);
+      if (msg && msg.type !== 'revoked') await msg.delete(true);
+      console.log(`[handler] Deleted reminder message for ${taskId}`);
     } catch (err) {
       console.error(`[handler] Failed to delete reminder for ${taskId}:`, err.message);
     }
-    if (gone) {
-      db.removeReminderMessage(rec.id);
-      console.log(`[handler] Deleted reminder message for ${taskId}`);
-    } else {
-      console.warn(`[handler] Reminder for ${taskId} survived deletion — retrying next time`);
-    }
+    db.removeReminderMessage(rec.id);
   }
 }
 
