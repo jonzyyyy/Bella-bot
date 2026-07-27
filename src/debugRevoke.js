@@ -66,8 +66,19 @@ async function diagnoseRevoke(client, messageIds) {
  * Destructive by design: it revokes the bot's own leftover status lists, which
  * is the outcome we want anyway. Enable with BELLA_DEBUG_REVOKE=2.
  */
-async function tryRevokeSignatures(client, messageId) {
-  const result = await client.pupPage.evaluate(async (msgId) => {
+async function tryRevokeSignatures(client, messageIds) {
+  for (const messageId of messageIds) {
+    const result = await revokeSignatureRun(client, messageId);
+    console.log(`[revoke-debug] signature test on ${messageId} → ${JSON.stringify(result)}`);
+    // Messages WhatsApp no longer holds tell us nothing — move to the next.
+    if (result.found) return result;
+  }
+  console.log('[revoke-debug] No tracked message was still present to test against.');
+  return null;
+}
+
+async function revokeSignatureRun(client, messageId) {
+  return client.pupPage.evaluate(async (msgId) => {
     const log = [];
     const Collections = window.require('WAWebCollections');
     const { Cmd } = window.require('WAWebCmd');
@@ -114,9 +125,6 @@ async function tryRevokeSignatures(client, messageId) {
 
     return { found: true, worked: null, log };
   }, messageId);
-
-  console.log(`[revoke-debug] signature test on ${messageId} → ${JSON.stringify(result, null, 1)}`);
-  return result;
 }
 
 module.exports = { diagnoseRevoke, tryRevokeSignatures };

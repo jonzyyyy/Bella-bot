@@ -86,7 +86,7 @@ async function probeRevoke() {
     // BELLA_DEBUG_REVOKE=2 additionally tests which revoke signature works, by
     // actually revoking the leftover status lists.
     if (process.env.BELLA_DEBUG_REVOKE === '2' && ids.length > 0) {
-      await tryRevokeSignatures(client, ids[0]);
+      await tryRevokeSignatures(client, ids);
     }
   } catch (err) {
     console.error('[revoke-debug] Probe aborted:', err.message);
