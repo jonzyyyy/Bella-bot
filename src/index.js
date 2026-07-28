@@ -79,6 +79,7 @@ async function probeRevoke() {
     const db = require('./db');
     const {
       diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath, measureRevokeLatency,
+      compareDeleteSequences,
     } = require('./debugRevoke');
     const date = new Date().toLocaleDateString('en-CA', { timeZone: config.timezone });
     const chat = await client.getChatById(groupChatId);
@@ -95,6 +96,9 @@ async function probeRevoke() {
     }
     if (process.env.BELLA_DEBUG_REVOKE === '4' && ids.length > 0) {
       await measureRevokeLatency(client, ids);
+    }
+    if (process.env.BELLA_DEBUG_REVOKE === '5') {
+      await compareDeleteSequences(client, groupChatId);
     }
   } catch (err) {
     console.error('[revoke-debug] Probe aborted:', err.message);

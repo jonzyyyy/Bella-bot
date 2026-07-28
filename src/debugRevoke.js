@@ -219,4 +219,63 @@ async function measureRevokeLatency(client, messageIds, maxMs = 240000) {
   }
 }
 
-module.exports = { diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath, measureRevokeLatency };
+/**
+ * Isolates the one structural difference between the delete that works and the
+ * delete that doesn't.
+ *
+ * The same message revokes in ~2.3s when deleted from the startup probe, but
+ * survives a 5s wait when deleted by postStatus. The only thing postStatus does
+ * differently is call chat.fetchMessages() immediately beforehand. This posts a
+ * throwaway message, deletes it each way, and times the result.
+ *
+ * Posts two temporary messages to the group, which delete themselves if the
+ * revoke works. Enable with BELLA_DEBUG_REVOKE=5.
+ */
+async function compareDeleteSequences(client, chatId) {
+  const chat = await client.getChatById(chatId);
+
+  const run = async (label, withPreload) => {
+    const sent = await chat.sendMessage(`🐾 _bot self-test (${label}) — this message deletes itself_`);
+    const id = sent.id._serialized ?? sent.id.id;
+    await new Promise((r) => setTimeout(r, 3000));
+
+    if (withPreload) {
+      try {
+        await chat.fetchMessages({ limit: 30 });
+      } catch (err) {
+        console.warn(`[revoke-debug] ${label} fetchMessages failed: ${err.message}`);
+      }
+    }
+
+    const msg = await client.getMessageById(id).catch(() => null);
+    if (!msg) {
+      console.log(`[revoke-debug] ${label}: message vanished before delete`);
+      return;
+    }
+
+    const started = Date.now();
+    try {
+      await msg.delete(true);
+    } catch (err) {
+      console.error(`[revoke-debug] ${label} delete threw: ${err.message}`);
+    }
+
+    let elapsed = null;
+    while (Date.now() - started < 30000) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const cur = await client.getMessageById(id).catch(() => null);
+      if (!cur || cur.type === 'revoked') {
+        elapsed = Date.now() - started;
+        break;
+      }
+    }
+    console.log(`[revoke-debug] ${label} (preload=${withPreload}) → ${elapsed === null ? 'STILL PRESENT after 30s' : `gone after ${elapsed}ms`}`);
+  };
+
+  await run('with-preload', true);
+  await run('no-preload', false);
+}
+
+module.exports = {
+  diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath, measureRevokeLatency, compareDeleteSequences,
+};
