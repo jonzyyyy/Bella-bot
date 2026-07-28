@@ -81,6 +81,25 @@ const MAX_DELETE_ATTEMPTS = 3;
 
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Whether WhatsApp still has the message in its in-memory collection, as
+ * opposed to only being able to re-read it from storage.
+ *
+ * Diagnostic: synthetic deletes of seconds-old messages always succeed, while
+ * production deletes of older ones fail, and eviction from this collection is
+ * the difference that would explain it.
+ */
+async function isInMemory(client, messageId) {
+  try {
+    return await client.pupPage.evaluate(
+      (id) => !!window.require('WAWebCollections').Msg.get(id),
+      messageId
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
 /** True once WhatsApp no longer holds the message as a normal chat message. */
 async function isGone(client, messageId) {
   const msg = await client.getMessageById(messageId).catch(() => null);
@@ -115,7 +134,8 @@ async function postStatus(chatId, client, eod) {
       if (actualId !== prev.message_id) {
         console.warn(`[status] id mismatch — asked for ${prev.message_id}, got ${actualId}`);
       }
-      console.log(`[status] deleting ${prev.message_id} type=${msg.type} ack=${msg.ack}`);
+      const ageMin = Math.round((Date.now() - msg.timestamp * 1000) / 60000);
+      console.log(`[status] deleting ${prev.message_id} type=${msg.type} ack=${msg.ack} ageMin=${ageMin} inMemory=${await isInMemory(client, prev.message_id)}`);
       await msg.delete(true);
       pending.push(prev);
     } catch (err) {
