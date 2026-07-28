@@ -1,6 +1,7 @@
 const { config, isActiveToday, nextDueDate } = require('./configStore');
 const db = require('./db');
 const { buildStatusMessage } = require('./formatter');
+const { revoke } = require('./revoker');
 
 function buildTaskEntry(task, todayMidnight) {
   const completions = db.getCompletionsToday(task.id);
@@ -69,85 +70,36 @@ function sendStatus(chatId, client, { eod = false } = {}) {
   return statusChain;
 }
 
-// A revoke doesn't show up in the local message model straight away: measured
-// on the pinned web build, a message still reads as type "chat" immediately
-// after delete() and only reads as gone a few seconds later. Checking sooner
-// reports working deletes as failures.
-const REVOKE_SETTLE_MS = 5000;
-
 // Give up on a message after this many failed attempts rather than retrying a
 // stuck message on every completion for the rest of the day.
 const MAX_DELETE_ATTEMPTS = 3;
-
-const settle = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Whether WhatsApp still has the message in its in-memory collection, as
- * opposed to only being able to re-read it from storage.
- *
- * Diagnostic: synthetic deletes of seconds-old messages always succeed, while
- * production deletes of older ones fail, and eviction from this collection is
- * the difference that would explain it.
- */
-async function isInMemory(client, messageId) {
-  try {
-    return await client.pupPage.evaluate(
-      (id) => !!window.require('WAWebCollections').Msg.get(id),
-      messageId
-    );
-  } catch (_) {
-    return null;
-  }
-}
-
-/** True once WhatsApp no longer holds the message as a normal chat message. */
-async function isGone(client, messageId) {
-  const msg = await client.getMessageById(messageId).catch(() => null);
-  return !msg || msg.type === 'revoked';
-}
 
 async function postStatus(chatId, client, eod) {
   const date = todayStr();
   const chat = await client.getChatById(chatId);
 
-  // Pull recent history into WhatsApp's in-memory store so the messages we're
-  // about to delete are loaded and addressable.
-  try {
-    await chat.fetchMessages({ limit: 30 });
-  } catch (err) {
-    console.warn('[status] Could not preload recent messages:', err.message);
-  }
-
-  // Clear every status still tracked for today, not just the newest. Delete
-  // them all first and verify once afterwards, so the wait for WhatsApp to
-  // catch up is paid a single time rather than per message.
+  // Clear every status still tracked for today, not just the newest. Each
+  // revoke goes through the global queue, which confirms one is gone before
+  // issuing the next — two in flight at once and WhatsApp drops the second.
   db.purgeStatusMessagesBefore(date);
-  const pending = [];
   for (const prev of db.getStatusMessages(date)) {
+    let gone = false;
     try {
-      if (await isGone(client, prev.message_id)) {
-        db.removeStatusMessage(prev.id);
-        continue;
-      }
-      const msg = await client.getMessageById(prev.message_id);
-      const actualId = msg.id?._serialized ?? msg.id?.id;
-      if (actualId !== prev.message_id) {
-        console.warn(`[status] id mismatch — asked for ${prev.message_id}, got ${actualId}`);
-      }
-      const ageMin = Math.round((Date.now() - msg.timestamp * 1000) / 60000);
-      console.log(`[status] deleting ${prev.message_id} type=${msg.type} ack=${msg.ack} ageMin=${ageMin} inMemory=${await isInMemory(client, prev.message_id)}`);
-      await msg.delete(true);
-      pending.push(prev);
+      gone = await revoke(client, prev.message_id);
     } catch (err) {
       console.error('[status] Could not delete previous status:', err.message);
-      pending.push(prev);
+    }
+    if (gone) {
+      db.removeStatusMessage(prev.id);
+    } else if (prev.attempts + 1 >= MAX_DELETE_ATTEMPTS) {
+      console.error(`[status] Giving up on ${prev.message_id} after ${MAX_DELETE_ATTEMPTS} attempts`);
+      db.removeStatusMessage(prev.id);
+    } else {
+      console.warn(`[status] ${prev.message_id} still present — retrying next time`);
+      db.bumpStatusAttempt(prev.id);
     }
   }
 
-  // Post the new list before verifying: the deletes are already issued, and
-  // waiting on WhatsApp to catch up first would just delay the reply people are
-  // waiting for after reacting.
-  //
   // Sent as a plain message, never a reply: a reply quotes the reminder (or the
   // user's own text) back into the group, which both doubles the text and makes
   // the just-deleted reminder look like it's still there.
@@ -157,20 +109,6 @@ async function postStatus(chatId, client, eod) {
   const sent = await chat.sendMessage(body);
   if (sent?.id) {
     db.saveStatusMessage(sent.id._serialized ?? sent.id.id, chatId, date);
-  }
-
-  if (pending.length === 0) return;
-  await settle(REVOKE_SETTLE_MS);
-  for (const prev of pending) {
-    if (await isGone(client, prev.message_id)) {
-      db.removeStatusMessage(prev.id);
-    } else if (prev.attempts + 1 >= MAX_DELETE_ATTEMPTS) {
-      console.error(`[status] Giving up on ${prev.message_id} after ${MAX_DELETE_ATTEMPTS} attempts`);
-      db.removeStatusMessage(prev.id);
-    } else {
-      console.warn(`[status] ${prev.message_id} still present — retrying next time`);
-      db.bumpStatusAttempt(prev.id);
-    }
   }
 }
 

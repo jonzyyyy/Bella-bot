@@ -9,6 +9,7 @@ const { matchTask, isStatusRequest, matchHistoryRequest, isResponsibilityRequest
 const { buildHistoryMessage, buildRemindersMessage, buildWeeklyResponsibility, fmtTime } = require('./formatter');
 const { rescheduleReminders } = require('./reminders');
 const { buildCurrentStatus, buildHistoricalStatus, sendStatus } = require('./status');
+const { revoke } = require('./revoker');
 const { notify } = require('./notify');
 
 /**
@@ -129,19 +130,22 @@ async function deleteTaskReminders(taskId, client) {
   // re-attempting months-old messages on every completion.
   db.purgeOldReminderMessages();
 
-  // Issue the deletes without waiting to confirm them. A revoke takes a few
-  // seconds to show up in the local message model, and blocking on that here
-  // would delay the status list that follows; the rows are cleared either way
-  // and anything genuinely left behind is caught by the purge above.
+  // Queued, one at a time: these run microseconds before the status list's own
+  // revoke, and WhatsApp drops a revoke issued while another is in flight.
+  // That overlap is why reacting to a reminder left the old list behind.
   for (const rec of db.getActiveReminderMessages(taskId)) {
+    let gone = false;
     try {
-      const msg = await client.getMessageById(rec.message_id);
-      if (msg && msg.type !== 'revoked') await msg.delete(true);
-      console.log(`[handler] Deleted reminder message for ${taskId}`);
+      gone = await revoke(client, rec.message_id);
     } catch (err) {
       console.error(`[handler] Failed to delete reminder for ${taskId}:`, err.message);
     }
-    db.removeReminderMessage(rec.id);
+    if (gone) {
+      db.removeReminderMessage(rec.id);
+      console.log(`[handler] Deleted reminder message for ${taskId}`);
+    } else {
+      console.warn(`[handler] Reminder for ${taskId} still present — retrying next time`);
+    }
   }
 }
 
