@@ -287,54 +287,71 @@ async function compareDeleteSequences(client, chatId) {
  *
  * Enable with BELLA_DEBUG_REVOKE=7.
  */
-function watchRevokeHealth(client, intervalMs = 600000) {
-  const selfId = client.info?.wid?._serialized;
-  if (!selfId) {
-    console.error('[revoke-health] No self id available — cannot run.');
-    return;
+async function probeChatRevoke(client, label, chatId, startedAt) {
+  const upMin = Math.round((Date.now() - startedAt) / 60000);
+  try {
+    const chat = await client.getChatById(chatId);
+    // Leading 🐾 is a BOT_MARKER, so handleMessage ignores this message.
+    const sent = await chat.sendMessage(`🐾 _revoke health check (${label}) — deletes itself_`);
+    const id = sent.id._serialized ?? sent.id.id;
+    await new Promise((r) => setTimeout(r, 2000));
+
+    const msg = await client.getMessageById(id).catch(() => null);
+    if (!msg) {
+      console.log(`[revoke-health] ${label} uptime=${upMin}min → vanished before delete`);
+      return true;
+    }
+
+    const started = Date.now();
+    await msg.delete(true);
+
+    let elapsed = null;
+    while (Date.now() - started < 20000) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const cur = await client.getMessageById(id).catch(() => null);
+      if (!cur || cur.type === 'revoked') {
+        elapsed = Date.now() - started;
+        break;
+      }
+    }
+    if (elapsed === null) {
+      console.error(`[revoke-health] ${label} uptime=${upMin}min → FAILED (still present after 20s)`);
+      return false;
+    }
+    console.log(`[revoke-health] ${label} uptime=${upMin}min → ok in ${elapsed}ms`);
+    return true;
+  } catch (err) {
+    console.error(`[revoke-health] ${label} uptime=${upMin}min → check failed: ${err.message}`);
+    return false;
   }
+}
+
+/**
+ * Probes the self chat and the group in lockstep, so a failure in one and not
+ * the other says whether the fault is session-wide or specific to the group.
+ *
+ * The group check stops after its first failure — a failed revoke leaves the
+ * check message behind, and repeating it would litter the group.
+ */
+function watchRevokeHealth(client, groupChatId, intervalMs = 1800000) {
+  const selfId = client.info?.wid?._serialized;
   const startedAt = Date.now();
+  let groupEnabled = !!groupChatId;
 
   const tick = async () => {
-    const upMin = Math.round((Date.now() - startedAt) / 60000);
-    try {
-      const chat = await client.getChatById(selfId);
-      const sent = await chat.sendMessage(`revoke health check — ${new Date().toISOString()}`);
-      const id = sent.id._serialized ?? sent.id.id;
-      await new Promise((r) => setTimeout(r, 2000));
-
-      const msg = await client.getMessageById(id).catch(() => null);
-      if (!msg) {
-        console.log(`[revoke-health] uptime=${upMin}min → message vanished before delete`);
-        return;
+    if (selfId) await probeChatRevoke(client, 'self ', selfId, startedAt);
+    if (groupEnabled) {
+      const ok = await probeChatRevoke(client, 'group', groupChatId, startedAt);
+      if (!ok) {
+        groupEnabled = false;
+        console.error('[revoke-health] Group revoke failed — stopping group checks so nothing more is left behind.');
       }
-
-      const started = Date.now();
-      try {
-        await msg.delete(true);
-      } catch (err) {
-        console.error(`[revoke-health] uptime=${upMin}min → delete threw: ${err.message}`);
-        return;
-      }
-
-      let elapsed = null;
-      while (Date.now() - started < 20000) {
-        await new Promise((r) => setTimeout(r, 1000));
-        const cur = await client.getMessageById(id).catch(() => null);
-        if (!cur || cur.type === 'revoked') {
-          elapsed = Date.now() - started;
-          break;
-        }
-      }
-      console.log(`[revoke-health] uptime=${upMin}min → ${elapsed === null ? 'FAILED (still present after 20s)' : `ok in ${elapsed}ms`}`);
-    } catch (err) {
-      console.error(`[revoke-health] uptime=${upMin}min → check failed: ${err.message}`);
     }
   };
 
   tick();
   setInterval(tick, intervalMs).unref?.();
-  console.log(`[revoke-health] Watching revoke health every ${Math.round(intervalMs / 60000)} min.`);
+  console.log(`[revoke-health] Watching self + group every ${Math.round(intervalMs / 60000)} min.`);
 }
 
 module.exports = {

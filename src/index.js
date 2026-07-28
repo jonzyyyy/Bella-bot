@@ -104,7 +104,7 @@ async function probeRevoke() {
     // previous list survives this, the fault is inside postStatus rather than
     // in the event-handler context it normally runs from.
     if (process.env.BELLA_DEBUG_REVOKE === '7') {
-      watchRevokeHealth(client);
+      watchRevokeHealth(client, groupChatId);
     }
     if (process.env.BELLA_DEBUG_REVOKE === '6') {
       const { sendStatus } = require('./status');
