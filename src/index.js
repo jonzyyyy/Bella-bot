@@ -79,7 +79,7 @@ async function probeRevoke() {
     const db = require('./db');
     const {
       diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath, measureRevokeLatency,
-      compareDeleteSequences,
+      compareDeleteSequences, watchRevokeHealth,
     } = require('./debugRevoke');
     const date = new Date().toLocaleDateString('en-CA', { timeZone: config.timezone });
     const chat = await client.getChatById(groupChatId);
@@ -103,6 +103,9 @@ async function probeRevoke() {
     // Runs the real production path. Every isolated delete works, so if the
     // previous list survives this, the fault is inside postStatus rather than
     // in the event-handler context it normally runs from.
+    if (process.env.BELLA_DEBUG_REVOKE === '7') {
+      watchRevokeHealth(client);
+    }
     if (process.env.BELLA_DEBUG_REVOKE === '6') {
       const { sendStatus } = require('./status');
       console.log('[revoke-debug] invoking the real sendStatus…');

@@ -276,6 +276,68 @@ async function compareDeleteSequences(client, chatId) {
   await run('no-preload', false);
 }
 
+/**
+ * Tracks whether revoking still works as the session ages.
+ *
+ * Every measured success happened seconds after a restart; every failure hours
+ * in. Sending keeps working throughout, so the suspicion is that the revoke
+ * path specifically degrades over the life of a session. This posts and deletes
+ * a message in the bot's own "message yourself" chat — not the group — every
+ * `intervalMs`, and logs the latency against uptime.
+ *
+ * Enable with BELLA_DEBUG_REVOKE=7.
+ */
+function watchRevokeHealth(client, intervalMs = 600000) {
+  const selfId = client.info?.wid?._serialized;
+  if (!selfId) {
+    console.error('[revoke-health] No self id available — cannot run.');
+    return;
+  }
+  const startedAt = Date.now();
+
+  const tick = async () => {
+    const upMin = Math.round((Date.now() - startedAt) / 60000);
+    try {
+      const chat = await client.getChatById(selfId);
+      const sent = await chat.sendMessage(`revoke health check — ${new Date().toISOString()}`);
+      const id = sent.id._serialized ?? sent.id.id;
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const msg = await client.getMessageById(id).catch(() => null);
+      if (!msg) {
+        console.log(`[revoke-health] uptime=${upMin}min → message vanished before delete`);
+        return;
+      }
+
+      const started = Date.now();
+      try {
+        await msg.delete(true);
+      } catch (err) {
+        console.error(`[revoke-health] uptime=${upMin}min → delete threw: ${err.message}`);
+        return;
+      }
+
+      let elapsed = null;
+      while (Date.now() - started < 20000) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const cur = await client.getMessageById(id).catch(() => null);
+        if (!cur || cur.type === 'revoked') {
+          elapsed = Date.now() - started;
+          break;
+        }
+      }
+      console.log(`[revoke-health] uptime=${upMin}min → ${elapsed === null ? 'FAILED (still present after 20s)' : `ok in ${elapsed}ms`}`);
+    } catch (err) {
+      console.error(`[revoke-health] uptime=${upMin}min → check failed: ${err.message}`);
+    }
+  };
+
+  tick();
+  setInterval(tick, intervalMs).unref?.();
+  console.log(`[revoke-health] Watching revoke health every ${Math.round(intervalMs / 60000)} min.`);
+}
+
 module.exports = {
   diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath, measureRevokeLatency, compareDeleteSequences,
+  watchRevokeHealth,
 };
