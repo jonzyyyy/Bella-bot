@@ -111,6 +111,11 @@ async function postStatus(chatId, client, eod) {
         continue;
       }
       const msg = await client.getMessageById(prev.message_id);
+      const actualId = msg.id?._serialized ?? msg.id?.id;
+      if (actualId !== prev.message_id) {
+        console.warn(`[status] id mismatch — asked for ${prev.message_id}, got ${actualId}`);
+      }
+      console.log(`[status] deleting ${prev.message_id} type=${msg.type} ack=${msg.ack}`);
       await msg.delete(true);
       pending.push(prev);
     } catch (err) {

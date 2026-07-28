@@ -100,6 +100,15 @@ async function probeRevoke() {
     if (process.env.BELLA_DEBUG_REVOKE === '5') {
       await compareDeleteSequences(client, groupChatId);
     }
+    // Runs the real production path. Every isolated delete works, so if the
+    // previous list survives this, the fault is inside postStatus rather than
+    // in the event-handler context it normally runs from.
+    if (process.env.BELLA_DEBUG_REVOKE === '6') {
+      const { sendStatus } = require('./status');
+      console.log('[revoke-debug] invoking the real sendStatus…');
+      await sendStatus(groupChatId, client);
+      console.log('[revoke-debug] sendStatus returned');
+    }
   } catch (err) {
     console.error('[revoke-debug] Probe aborted:', err.message);
   }
