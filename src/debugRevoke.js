@@ -170,4 +170,53 @@ async function testLibraryDeletePath(client, messageIds) {
   console.log('[revoke-debug] No surviving message to test the library path against.');
 }
 
-module.exports = { diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath };
+/**
+ * Measures how long a revoke actually takes to land.
+ *
+ * Deletes each message and polls until WhatsApp stops holding it, reporting the
+ * elapsed time. The fixed settle in postStatus was guessed from a single
+ * measurement on an hours-old message; production lists are still present after
+ * it, so the real distribution matters. Logs the message body so we can also
+ * confirm we're deleting the message we think we are.
+ *
+ * Skips the newest tracked message so the group keeps a current list.
+ * Enable with BELLA_DEBUG_REVOKE=4.
+ */
+async function measureRevokeLatency(client, messageIds, maxMs = 240000) {
+  const targets = messageIds.slice(0, -1); // keep the newest list in the group
+  if (targets.length === 0) {
+    console.log('[revoke-debug] Only one tracked status — nothing safe to measure against.');
+    return;
+  }
+
+  for (const messageId of targets) {
+    const msg = await client.getMessageById(messageId).catch(() => null);
+    if (!msg || msg.type === 'revoked') {
+      console.log(`[revoke-debug] ${messageId} already gone before delete`);
+      continue;
+    }
+    console.log(`[revoke-debug] deleting ${messageId} — body: ${JSON.stringify(String(msg.body).slice(0, 45))}`);
+
+    const started = Date.now();
+    try {
+      await msg.delete(true);
+    } catch (err) {
+      console.error(`[revoke-debug] delete threw: ${err.message}`);
+    }
+
+    let elapsed = null;
+    while (Date.now() - started < maxMs) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const cur = await client.getMessageById(messageId).catch(() => null);
+      if (!cur || cur.type === 'revoked') {
+        elapsed = Date.now() - started;
+        break;
+      }
+    }
+    console.log(
+      `[revoke-debug] ${messageId} → ${elapsed === null ? `STILL PRESENT after ${maxMs}ms` : `gone after ${elapsed}ms`}`
+    );
+  }
+}
+
+module.exports = { diagnoseRevoke, tryRevokeSignatures, testLibraryDeletePath, measureRevokeLatency };
