@@ -9,7 +9,7 @@
   "tasks": [
     {
       "id": "feed_am",
-      "label": "Breakfast (60g)",
+      "label": "Breakfast (50g)",
       "emoji": "🍖",
       "keywords": [
         "fed",
