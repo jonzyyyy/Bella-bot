@@ -245,12 +245,7 @@
         }
       ],
       "schedule": {
-        "everyDays": 3,
-        "anchor": "2026-06-30"
-      },
-      "ignore": {
-        "reason": "vet visit",
-        "until": "2026-07-21"
+        "daysOfWeek": [2, 6]
       }
     },
     {
@@ -334,6 +329,10 @@
       "schedule": {
         "everyMonths": 1,
         "anchor": "2026-06-01"
+      },
+      "ignore": {
+        "reason": "8-week food trial",
+        "until": "2026-08-23"
       },
       "reminders": [
         {
