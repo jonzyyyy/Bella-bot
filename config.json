@@ -28,7 +28,7 @@
       "reminders": [
         {
           "cron": "0 8 * * *",
-          "message": "Time for Bella's breakfast — 60g 🍖\nKibble only — no treats or anything from the floor until the vet clears it."
+          "message": "Time for Bella's breakfast — 50g 🍖\nKibble only — no treats or anything from the floor until the vet clears it."
         }
       ]
     },
